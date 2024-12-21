@@ -100,8 +100,6 @@ var (
 )
 
 func InsertChairLocations() {
-	log.Printf("InsertChairLocations(): jobs=%d", len(chairLocations))
-
 	if len(chairLocations) == 0 {
 		return
 	}
