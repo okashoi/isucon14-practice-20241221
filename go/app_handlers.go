@@ -732,7 +732,7 @@ func fetchNotification(ctx context.Context, user *User) (*appGetNotificationResp
 	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`, user.ID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &appGetNotificationResponse{
-				RetryAfterMs: 300,
+				RetryAfterMs: 30,
 			}, nil
 		}
 		return nil, err
@@ -774,7 +774,7 @@ func fetchNotification(ctx context.Context, user *User) (*appGetNotificationResp
 			CreatedAt: ride.CreatedAt.UnixMilli(),
 			UpdateAt:  ride.UpdatedAt.UnixMilli(),
 		},
-		RetryAfterMs: 300,
+		RetryAfterMs: 30,
 	}
 
 	if ride.ChairID.Valid {
