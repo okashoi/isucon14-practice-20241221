@@ -695,6 +695,9 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				events <- response
+				if response.Data.Status == "COMPLETED" {
+					ticker.Stop()
+				}
 			}
 		}
 	}()
