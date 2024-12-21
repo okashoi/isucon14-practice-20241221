@@ -672,9 +672,11 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	ride := &Ride{}
 	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`, user.ID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSON(w, http.StatusOK, &appGetNotificationResponse{
-				RetryAfterMs: 30,
-			})
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Connection", "keep-alive")
+			w.Header().Set("X-Accel-Buffering", "no")
+			w.Write([]byte(`{"retry_after_ms":300}`))
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err)
@@ -720,7 +722,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: ride.CreatedAt.UnixMilli(),
 			UpdateAt:  ride.UpdatedAt.UnixMilli(),
 		},
-		RetryAfterMs: 30,
+		RetryAfterMs: 300,
 	}
 
 	if ride.ChairID.Valid {
@@ -757,7 +759,10 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, response)
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 }
 
 func getChairStats(ctx context.Context, tx *sqlx.Tx, chairID string) (appGetNotificationResponseChairStats, error) {
