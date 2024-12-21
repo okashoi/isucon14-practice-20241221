@@ -174,11 +174,13 @@ CREATE TABLE coupons
 )
   COMMENT 'クーポンテーブル';
 
+DELIMITER $$
 
 CREATE TRIGGER update_latest_chair_locations
     AFTER INSERT ON chair_locations
     FOR EACH ROW
 BEGIN
+    -- 更新対象のchair_idがすでにlatest_chair_locationsに存在するか確認し、挿入または更新
     INSERT INTO latest_chair_locations (chair_id, latitude, longitude, total_distance, created_at)
     VALUES (NEW.chair_id, NEW.latitude, NEW.longitude, 0, NEW.created_at)
         ON DUPLICATE KEY UPDATE
@@ -188,17 +190,24 @@ BEGIN
                              latitude = NEW.latitude,
                              longitude = NEW.longitude,
                              created_at = NEW.created_at;
-END;
+    END$$
 
-CREATE TRIGGER update_latest_ride_statuses
-    AFTER INSERT ON ride_statuses
-    FOR EACH ROW
-BEGIN
-    INSERT INTO latest_ride_statuses (ride_id, status, created_at, app_sent_at, chair_sent_at)
-    VALUES (NEW.ride_id, NEW.status, NEW.created_at, NEW.app_sent_at, NEW.chair_sent_at)
-        ON DUPLICATE KEY UPDATE
-                             status = NEW.status,
-                             created_at = NEW.created_at,
-                             app_sent_at = NEW.app_sent_at,
-                             chair_sent_at = NEW.chair_sent_at;
-END;    
+    DELIMITER ;
+
+DELIMITER $$
+
+    CREATE TRIGGER update_latest_ride_statuses
+        AFTER INSERT ON ride_statuses
+        FOR EACH ROW
+    BEGIN
+        -- 最新のライドステータスを更新
+        INSERT INTO latest_ride_statuses (ride_id, status, created_at, app_sent_at, chair_sent_at)
+        VALUES (NEW.ride_id, NEW.status, NEW.created_at, NEW.app_sent_at, NEW.chair_sent_at)
+            ON DUPLICATE KEY UPDATE
+                                 status = NEW.status,
+                                 created_at = NEW.created_at,
+                                 app_sent_at = NEW.app_sent_at,
+                                 chair_sent_at = NEW.chair_sent_at;
+        END$$
+
+        DELIMITER ;
