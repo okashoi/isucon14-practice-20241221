@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 )
 
 var db *sqlx.DB
@@ -27,6 +28,14 @@ func main() {
 	}()
 
 	mux := setup()
+
+	go func() {
+		for {
+			InsertChairLocations()
+			time.Sleep(300 * time.Millisecond)
+		}
+	}()
+
 	slog.Info("Listening on :8080")
 	http.ListenAndServe(":8080", mux)
 }
