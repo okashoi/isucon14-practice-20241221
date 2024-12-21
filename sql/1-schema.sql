@@ -166,7 +166,6 @@ VALUES (NEW.ride_id, NEW.status, NEW.created_at, NEW.app_sent_at, NEW.chair_sent
                          chair_sent_at = NEW.chair_sent_at;
 END$$
 
-DELIMITER ;
 DROP TABLE IF EXISTS latest_ride_statuses;
 CREATE TABLE latest_ride_statuses
     (
@@ -179,7 +178,7 @@ CREATE TABLE latest_ride_statuses
         INDEX (ride_id, created_at DESC),
         INDEX (ride_id, app_sent_at, created_at),
         INDEX (ride_id, chair_sent_at, created_at),
-        PRIMARY KEY (id)
+        PRIMARY KEY (ride_id)
     )
         COMMENT = 'ライドステータスの変更履歴(最新)テーブル';
 
