@@ -33,7 +33,8 @@ CREATE TABLE chairs
   created_at   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '登録日時',
   updated_at   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '更新日時',
   PRIMARY KEY (id),
-  INDEX (access_token)
+  INDEX (access_token),
+  INDEX (owner_id)
 )
   COMMENT = '椅子情報テーブル';
 
@@ -93,6 +94,7 @@ CREATE TABLE rides
   created_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '要求日時',
   updated_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '状態更新日時',
   PRIMARY KEY (id),
+  INDEX (user_id, updated_at DESC),
   INDEX (chair_id, updated_at DESC)
 )
   COMMENT = 'ライド情報テーブル';
@@ -138,6 +140,7 @@ CREATE TABLE coupons
   discount   INTEGER      NOT NULL COMMENT '割引額',
   created_at DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '付与日時',
   used_by    VARCHAR(26)  NULL COMMENT 'クーポンが適用されたライドのID',
+  INDEX (used_by),
   PRIMARY KEY (user_id, code)
 )
   COMMENT 'クーポンテーブル';
