@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 )
 
 var db *sqlx.DB
@@ -31,6 +32,7 @@ func main() {
 	go func() {
 		for {
 			InsertChairLocations()
+			time.Sleep(500 * time.Millisecond)
 		}
 	}()
 
