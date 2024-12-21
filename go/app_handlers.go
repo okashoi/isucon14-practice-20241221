@@ -682,7 +682,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 
 	// イベント生成用ゴルーチン
 	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond)
+		ticker := time.NewTicker(300 * time.Millisecond)
 		defer ticker.Stop()
 		for {
 			select {
