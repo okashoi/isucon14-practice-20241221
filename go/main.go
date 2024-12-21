@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/felixge/fgprof"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
 	"log"
 	"log/slog"
 	"net"
@@ -12,11 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-sql-driver/mysql"
-	"github.com/jmoiron/sqlx"
 )
 
 var db *sqlx.DB
@@ -66,12 +65,11 @@ func setup() http.Handler {
 	dbConfig.DBName = dbname
 	dbConfig.ParseTime = true
 	dbConfig.InterpolateParams = true
+
 	_db, err := sqlx.Connect("mysql", dbConfig.FormatDSN())
 	if err != nil {
 		panic(err)
 	}
-	_db.SetMaxOpenConns(100)
-	_db.SetMaxIdleConns(100)
 	db = _db
 
 	mux := chi.NewRouter()
@@ -148,6 +146,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
+
 }
 
 type Coordinate struct {

@@ -51,6 +51,40 @@ CREATE TABLE chair_locations
 )
   COMMENT = '椅子の現在位置情報テーブル';
 
+DELIMITER $$
+
+CREATE TRIGGER update_latest_chair_locations
+    AFTER INSERT ON chair_locations
+    FOR EACH ROW
+BEGIN
+    -- 更新対象のchair_idがすでにlatest_chair_locationsに存在するか確認し、挿入または更新
+    INSERT INTO latest_chair_locations (chair_id, latitude, longitude, total_distance, created_at)
+    VALUES (NEW.chair_id, NEW.latitude, NEW.longitude, 0, NEW.created_at)
+        ON DUPLICATE KEY UPDATE
+                             total_distance = total_distance +
+                             IF(
+                             latitude IS NOT NULL AND longitude IS NOT NULL,
+                             ABS(latitude - NEW.latitude) + ABS(longitude - NEW.longitude),
+                             0
+                             ),
+                             latitude = NEW.latitude,
+                             longitude = NEW.longitude,
+                             created_at = NEW.created_at;
+    END$$
+
+DROP TABLE IF EXISTS latest_chair_locations;
+CREATE TABLE latest_chair_locations
+(
+    chair_id   VARCHAR(26) NOT NULL COMMENT '椅子ID',
+    latitude   INTEGER     NOT NULL COMMENT '経度',
+    longitude  INTEGER     NOT NULL COMMENT '緯度',
+    total_distance INTEGER NOT NULL COMMENT '総移動距離',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '登録日時',
+    INDEX (chair_id, created_at DESC),
+    PRIMARY KEY (chair_id)
+)
+    COMMENT = '椅子の現在位置情報と総移動距離テーブル';
+
 DROP TABLE IF EXISTS users;
 CREATE TABLE users
 (
