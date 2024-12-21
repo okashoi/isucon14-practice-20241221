@@ -201,10 +201,10 @@ func ownerGetChairs(w http.ResponseWriter, r *http.Request) {
        access_token,
        model,
        is_active,
-       created_at,
+       chairs.created_at,
        updated_at,
        distance_table.total_distance,
-       distance_table.created_at as  total_distance_updated_at
+       distance_table.created_at as total_distance_updated_at
 FROM chairs
        LEFT JOIN latest_chair_locations AS distance_table ON distance_table.chair_id = chairs.id
 WHERE owner_id = ?
