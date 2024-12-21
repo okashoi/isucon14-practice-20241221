@@ -60,11 +60,11 @@ WHERE
 		return
 	}
 
-	distanceFromPickupToDestination := abs(ride.PickupLatitude-ride.DestinationLatitude) + abs(ride.PickupLongitude-ride.DestinationLongitude)
-	// 配車位置までの移動時間 + 目的地までの移動時間を算出
+	// distanceFromPickupToDestination := abs(ride.PickupLatitude-ride.DestinationLatitude) + abs(ride.PickupLongitude-ride.DestinationLongitude)
+	// 配車位置までの移動時間を算出
 	for _, chair := range candidates {
 		distanceToPickup := abs(chair.Latitude-ride.PickupLatitude) + abs(chair.Longitude-ride.PickupLongitude)
-		chair.EstimatedTime = float32(distanceToPickup+distanceFromPickupToDestination) / float32(chair.Speed)
+		chair.EstimatedTime = float32(distanceToPickup) / float32(chair.Speed)
 	}
 
 	// 移動時間が最も短いものを 1 件取得
