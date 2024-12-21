@@ -77,7 +77,7 @@ func setup() http.Handler {
 	go func() {
 		lastProcessedID := ""
 		for {
-			newLastProcessedID, err := processBatch(db, lastProcessedID)
+			newLastProcessedID, err := processBatchUpsertLatestLocation(db, lastProcessedID)
 			if err != nil {
 				log.Printf("Error in batch processing: %v", err)
 			}
@@ -212,7 +212,7 @@ func secureRandomStr(b int) string {
 }
 
 // バッチ処理を関数化
-func processBatch(db *sqlx.DB, lastProcessedID string) (string, error) {
+func processBatchUpsertLatestLocation(db *sqlx.DB, lastProcessedID string) (string, error) {
 	// chair_locationsから新しいデータを取得
 	rows, err := fetchNewLocations(db, lastProcessedID)
 	if err != nil {
