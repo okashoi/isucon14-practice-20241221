@@ -2,7 +2,6 @@ package main
 
 import (
 	crand "crypto/rand"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/felixge/fgprof"
@@ -17,7 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"time"
 )
 
 var db *sqlx.DB
@@ -74,23 +72,23 @@ func setup() http.Handler {
 	}
 	db = _db
 
-	go func() {
-		lastProcessedID := ""
-		for {
-			newLastProcessedID, err := processBatchUpsertLatestLocation(db, lastProcessedID)
-			if err != nil {
-				log.Printf("Error in batch processing: %v", err)
-			}
-
-			// 更新された最新のIDを保存
-			if newLastProcessedID != "" {
-				lastProcessedID = newLastProcessedID
-			}
-
-			// 1秒スリープ
-			time.Sleep(1 * time.Second)
-		}
-	}()
+	//go func() {
+	//	lastProcessedID := ""
+	//	for {
+	//		newLastProcessedID, err := processBatchUpsertLatestLocation(db, lastProcessedID)
+	//		if err != nil {
+	//			log.Printf("Error in batch processing: %v", err)
+	//		}
+	//
+	//		// 更新された最新のIDを保存
+	//		if newLastProcessedID != "" {
+	//			lastProcessedID = newLastProcessedID
+	//		}
+	//
+	//		// 1秒スリープ
+	//		time.Sleep(1 * time.Second)
+	//	}
+	//}()
 
 	mux := chi.NewRouter()
 	mux.Use(middleware.Logger)
@@ -211,83 +209,84 @@ func secureRandomStr(b int) string {
 	return fmt.Sprintf("%x", k)
 }
 
-// バッチ処理を関数化
-func processBatchUpsertLatestLocation(db *sqlx.DB, lastProcessedID string) (string, error) {
-	// chair_locationsから新しいデータを取得
-	rows, err := fetchNewLocations(db, lastProcessedID)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch new locations: %w", err)
-	}
-	defer rows.Close()
-
-	// 最新のIDを格納
-	var latestID string
-	dataProcessed := false
-
-	for rows.Next() {
-		var id, chairID string
-		var latitude, longitude float64
-		var createdAt string
-
-		if err := rows.Scan(&id, &chairID, &latitude, &longitude, &createdAt); err != nil {
-			log.Printf("Failed to scan row: %v", err)
-			continue
-		}
-
-		// UPSERTでデータを更新
-		if err := upsertLatestLocation(db, chairID, latitude, longitude); err != nil {
-			log.Printf("Failed to upsert data for chair_id=%s: %v", chairID, err)
-			continue
-		}
-
-		// 最新のIDを記録
-		latestID = id
-		dataProcessed = true
-	}
-
-	if err := rows.Err(); err != nil {
-		return "", fmt.Errorf("error while iterating rows: %w", err)
-	}
-
-	// データが処理されていない場合、IDを空にして終了
-	if !dataProcessed {
-		return "", nil
-	}
-
-	return latestID, nil
-}
-
-// chair_locationsから前回処理したID以降のデータを取得
-func fetchNewLocations(db *sqlx.DB, lastProcessedID string) (*sql.Rows, error) {
-	query := `
-		SELECT id, chair_id, latitude, longitude, created_at
-		FROM chair_locations
-		WHERE id > ?
-		ORDER BY created_at
-	`
-	return db.Query(query, lastProcessedID)
-}
-
-// 最新の位置と総移動距離をUPSERT
-func upsertLatestLocation(db *sqlx.DB, chairID string, newLat, newLong float64) error {
-	// UPSERTクエリを実行
-	upsertQuery := `
-		INSERT INTO latest_chair_locations (chair_id, latitude, longitude, total_distance, created_at)
-		VALUES (?, ?, ?, 0, NOW())
-		ON DUPLICATE KEY UPDATE
-			total_distance = total_distance +
-				IF(latitude IS NOT NULL AND longitude IS NOT NULL,
-					ABS(latitude - VALUES(latitude)) + ABS(longitude - VALUES(longitude)),
-					0
-				),
-			latitude = VALUES(latitude),
-			longitude = VALUES(longitude),
-			created_at = VALUES(created_at)
-	`
-	_, err := db.Exec(upsertQuery, chairID, newLat, newLong)
-	if err != nil {
-		return fmt.Errorf("failed to execute upsert: %w", err)
-	}
-
-	return nil
-}
+//
+//// バッチ処理を関数化
+//func processBatchUpsertLatestLocation(db *sqlx.DB, lastProcessedID string) (string, error) {
+//	// chair_locationsから新しいデータを取得
+//	rows, err := fetchNewLocations(db, lastProcessedID)
+//	if err != nil {
+//		return "", fmt.Errorf("failed to fetch new locations: %w", err)
+//	}
+//	defer rows.Close()
+//
+//	// 最新のIDを格納
+//	var latestID string
+//	dataProcessed := false
+//
+//	for rows.Next() {
+//		var id, chairID string
+//		var latitude, longitude float64
+//		var createdAt string
+//
+//		if err := rows.Scan(&id, &chairID, &latitude, &longitude, &createdAt); err != nil {
+//			log.Printf("Failed to scan row: %v", err)
+//			continue
+//		}
+//
+//		// UPSERTでデータを更新
+//		if err := upsertLatestLocation(db, chairID, latitude, longitude); err != nil {
+//			log.Printf("Failed to upsert data for chair_id=%s: %v", chairID, err)
+//			continue
+//		}
+//
+//		// 最新のIDを記録
+//		latestID = id
+//		dataProcessed = true
+//	}
+//
+//	if err := rows.Err(); err != nil {
+//		return "", fmt.Errorf("error while iterating rows: %w", err)
+//	}
+//
+//	// データが処理されていない場合、IDを空にして終了
+//	if !dataProcessed {
+//		return "", nil
+//	}
+//
+//	return latestID, nil
+//}
+//
+//// chair_locationsから前回処理したID以降のデータを取得
+//func fetchNewLocations(db *sqlx.DB, lastProcessedID string) (*sql.Rows, error) {
+//	query := `
+//		SELECT id, chair_id, latitude, longitude, created_at
+//		FROM chair_locations
+//		WHERE id > ?
+//		ORDER BY created_at
+//	`
+//	return db.Query(query, lastProcessedID)
+//}
+//
+//// 最新の位置と総移動距離をUPSERT
+//func upsertLatestLocation(db *sqlx.DB, chairID string, newLat, newLong float64) error {
+//	// UPSERTクエリを実行
+//	upsertQuery := `
+//		INSERT INTO latest_chair_locations (chair_id, latitude, longitude, total_distance, created_at)
+//		VALUES (?, ?, ?, 0, NOW())
+//		ON DUPLICATE KEY UPDATE
+//			total_distance = total_distance +
+//				IF(latitude IS NOT NULL AND longitude IS NOT NULL,
+//					ABS(latitude - VALUES(latitude)) + ABS(longitude - VALUES(longitude)),
+//					0
+//				),
+//			latitude = VALUES(latitude),
+//			longitude = VALUES(longitude),
+//			created_at = VALUES(created_at)
+//	`
+//	_, err := db.Exec(upsertQuery, chairID, newLat, newLong)
+//	if err != nil {
+//		return fmt.Errorf("failed to execute upsert: %w", err)
+//	}
+//
+//	return nil
+//}
