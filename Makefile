@@ -4,11 +4,11 @@ gogo: stop-services build truncate-logs start-services
 
 stop-services:
 	sudo systemctl stop nginx
-	sudo systemctl stop isuride.golang
+	sudo systemctl stop isuride-go.service
 	sudo systemctl stop mysql
 
 build:
-	cd webapp/go/ && go build -o isuride
+	cd go/ && go build -o isuride
 
 truncate-logs:
 	sudo journalctl --vacuum-size=1K
@@ -19,7 +19,7 @@ truncate-logs:
 
 start-services:
 	sudo systemctl start mysql
-	sudo systemctl start isuride.golang
+	sudo systemctl start isuride-go.service
 	sudo systemctl start nginx
 
 kataribe: timestamp=$(shell TZ=Asia/Tokyo date "+%Y%m%d-%H%M%S")
