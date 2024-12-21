@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -189,103 +188,81 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	chair := ctx.Value("chair").(*Chair)
 
-	// Set headers for Server-Sent Events (SSE)
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
+	tx, err := db.Beginx()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer tx.Rollback()
+	ride := &Ride{}
+	yetSentRideStatus := RideStatus{}
+	status := ""
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeError(w, http.StatusInternalServerError, errors.New("streaming unsupported"))
+	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair.ID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
+				RetryAfterMs: 300,
+			})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	events := make(chan *chairGetNotificationResponse, 100)
-	defer close(events)
-
-	// Goroutine to handle notifications
-	go func() {
-		tx, err := db.Beginx()
-		if err != nil {
-			events <- &chairGetNotificationResponse{RetryAfterMs: 300}
-			return
-		}
-		defer tx.Rollback()
-
-		ride := &Ride{}
-		if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, chair.ID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				events <- &chairGetNotificationResponse{RetryAfterMs: 300}
-				return
-			}
-			events <- &chairGetNotificationResponse{RetryAfterMs: 300}
-			return
-		}
-
-		yetSentRideStatus := RideStatus{}
-		status := ""
-		if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
-			events <- &chairGetNotificationResponse{RetryAfterMs: 300}
-		} else {
-			status = yetSentRideStatus.Status
-		}
-
-		user := &User{}
-		if err := tx.GetContext(ctx, user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID); err != nil {
-			events <- &chairGetNotificationResponse{RetryAfterMs: 300}
-			return
-		}
-
-		if yetSentRideStatus.ID != "" {
-			_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
+	if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND chair_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			status, err = getLatestRideStatus(ctx, tx, ride.ID)
 			if err != nil {
-				events <- &chairGetNotificationResponse{RetryAfterMs: 300}
+				writeError(w, http.StatusInternalServerError, err)
 				return
 			}
-		}
-
-		if err := tx.Commit(); err != nil {
-			events <- &chairGetNotificationResponse{RetryAfterMs: 300}
+		} else {
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+	} else {
+		status = yetSentRideStatus.Status
+	}
 
-		events <- &chairGetNotificationResponse{
-			Data: &chairGetNotificationResponseData{
-				RideID: ride.ID,
-				User: simpleUser{
-					ID:   user.ID,
-					Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
-				},
-				PickupCoordinate: Coordinate{
-					Latitude:  ride.PickupLatitude,
-					Longitude: ride.PickupLongitude,
-				},
-				DestinationCoordinate: Coordinate{
-					Latitude:  ride.DestinationLatitude,
-					Longitude: ride.DestinationLongitude,
-				},
-				Status: status,
-			},
-			RetryAfterMs: 300,
-		}
-	}()
+	user := &User{}
+	err = tx.GetContext(ctx, user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 
-	// SSE event loop
-	for {
-		select {
-		case <-ctx.Done():
+	if yetSentRideStatus.ID != "" {
+		_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
 			return
-		case event := <-events:
-			if event.Data != nil {
-				_, err := json.Marshal(event.Data)
-				if err != nil {
-					continue
-				}
-			}
-			flusher.Flush()
 		}
 	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, &chairGetNotificationResponse{
+		Data: &chairGetNotificationResponseData{
+			RideID: ride.ID,
+			User: simpleUser{
+				ID:   user.ID,
+				Name: fmt.Sprintf("%s %s", user.Firstname, user.Lastname),
+			},
+			PickupCoordinate: Coordinate{
+				Latitude:  ride.PickupLatitude,
+				Longitude: ride.PickupLongitude,
+			},
+			DestinationCoordinate: Coordinate{
+				Latitude:  ride.DestinationLatitude,
+				Longitude: ride.DestinationLongitude,
+			},
+			Status: status,
+		},
+		RetryAfterMs: 300,
+	})
 }
 
 type postChairRidesRideIDStatusRequest struct {
