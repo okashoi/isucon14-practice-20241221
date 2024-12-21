@@ -27,6 +27,13 @@ func main() {
 	}()
 
 	mux := setup()
+
+	go func() {
+		for {
+			InsertChairLocations()
+		}
+	}()
+
 	slog.Info("Listening on :8080")
 	http.ListenAndServe(":8080", mux)
 }
