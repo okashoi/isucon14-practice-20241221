@@ -43,29 +43,8 @@ FROM
         ON chairs.model = chair_models.name
 	INNER JOIN latest_chair_locations
 		ON chairs.id = latest_chair_locations.chair_id
-	INNER JOIN (
-		SELECT
-			chair_id as chair_id,
-			COUNT(*) = 0 as is_available
-		FROM (
-			SELECT
-			    MAX(chair_id) as chair_id,
-    	    	COUNT(chair_sent_at) = 6 AS completed
-	    	FROM
-    		    ride_statuses
-	    	    RIGHT JOIN rides
-	    	        ON ride_statuses.ride_id = rides.id
-	    	WHERE
-	    	    rides.chair_id IS NOT NULL
-    		GROUP BY ride_id
-		) ride_chair_statuses
-		WHERE ride_chair_statuses.completed = FALSE
-		GROUP BY chair_id
-	) chair_availability
-		ON chairs.id = chair_availability.chair_id
 WHERE
-    chairs.is_active = TRUE AND
-    chair_availability.is_available = TRUE;
+    chairs.is_active = TRUE;
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
@@ -93,7 +72,23 @@ WHERE
 		return candidates[i].EstimatedTime < candidates[j].EstimatedTime
 	})
 
-	matched := candidates[0]
+	var matched CandidateChair
+	empty := false
+	for _, candidate := range candidates {
+		if err := db.GetContext(ctx, &empty, "SELECT COUNT(*) = 0 FROM (SELECT COUNT(chair_sent_at) = 6 AS completed FROM ride_statuses WHERE ride_id IN (SELECT id FROM rides WHERE chair_id = ?) GROUP BY ride_id) is_completed WHERE completed = FALSE", candidate.ID); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if empty {
+			matched = candidate
+			break
+		}
+	}
+	if !empty {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", matched.ID, ride.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
