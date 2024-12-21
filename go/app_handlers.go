@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -662,25 +664,78 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := ctx.Value("user").(*User)
 
+	// ヘッダーの設定
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, errors.New("expected http.ResponseWriter to be an http.Flusher"))
+		return
+	}
+
+	// イベント送信用のチャンネルを作成
+	events := make(chan *appGetNotificationResponse)
+	defer close(events)
+
+	// イベント生成用ゴルーチン
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				response, err := fetchNotification(ctx, user)
+				if err != nil {
+					// エラーハンドリング（必要に応じてログを出力）
+					continue
+				}
+				events <- response
+			}
+		}
+	}()
+
+	// イベント送信ループ
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event := <-events:
+			// 再接続のタイミングを設定（必要に応じて）
+			if event.RetryAfterMs > 0 {
+				fmt.Fprintf(w, "retry: %d\n", event.RetryAfterMs)
+			}
+			// データをSSEフォーマットで送信
+			data, err := json.Marshal(event.Data)
+			if err != nil {
+				// JSONエンコードエラーのハンドリング
+				continue
+			}
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		}
+	}
+}
+
+func fetchNotification(ctx context.Context, user *User) (*appGetNotificationResponse, error) {
 	tx, err := db.Beginx()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
+		return nil, err
 	}
 	defer tx.Rollback()
 
 	ride := &Ride{}
 	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`, user.ID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			w.Header().Set("Content-Type", "text/event-stream")
-			w.Header().Set("Cache-Control", "no-cache")
-			w.Header().Set("Connection", "keep-alive")
-			w.Header().Set("X-Accel-Buffering", "no")
-			w.Write([]byte(`{"retry_after_ms":300}`))
-			return
+			return &appGetNotificationResponse{
+				RetryAfterMs: 300,
+			}, nil
 		}
-		writeError(w, http.StatusInternalServerError, err)
-		return
+		return nil, err
 	}
 
 	yetSentRideStatus := RideStatus{}
@@ -689,12 +744,10 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, sql.ErrNoRows) {
 			status, err = getLatestRideStatus(ctx, tx, ride.ID)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, err)
-				return
+				return nil, err
 			}
 		} else {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+			return nil, err
 		}
 	} else {
 		status = yetSentRideStatus.Status
@@ -702,8 +755,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 
 	fare, err := calculateDiscountedFare(ctx, tx, user.ID, ride, ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
+		return nil, err
 	}
 
 	response := &appGetNotificationResponse{
@@ -728,14 +780,12 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	if ride.ChairID.Valid {
 		chair := &Chair{}
 		if err := tx.GetContext(ctx, chair, `SELECT * FROM chairs WHERE id = ?`, ride.ChairID); err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+			return nil, err
 		}
 
 		stats, err := getChairStats(ctx, tx, chair.ID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+			return nil, err
 		}
 
 		response.Data.Chair = &appGetNotificationResponseChair{
@@ -749,20 +799,15 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	if yetSentRideStatus.ID != "" {
 		_, err := tx.ExecContext(ctx, `UPDATE ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE id = ?`, yetSentRideStatus.ID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+			return nil, err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
+		return nil, err
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
+	return response, nil
 }
 
 func getChairStats(ctx context.Context, tx *sqlx.Tx, chairID string) (appGetNotificationResponseChairStats, error) {
