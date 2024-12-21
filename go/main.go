@@ -79,6 +79,8 @@ func setup() http.Handler {
 	if err != nil {
 		panic(err)
 	}
+	_db.SetMaxOpenConns(100)
+	_db.SetMaxIdleConns(100)
 	db = _db
 
 	mux := chi.NewRouter()
