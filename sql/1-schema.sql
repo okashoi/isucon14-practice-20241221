@@ -51,7 +51,6 @@ CREATE TABLE chair_locations
 )
   COMMENT = '椅子の現在位置情報テーブル';
 
-DELIMITER $$
 
 CREATE TRIGGER update_latest_chair_locations
     AFTER INSERT ON chair_locations
@@ -70,7 +69,7 @@ BEGIN
                              latitude = NEW.latitude,
                              longitude = NEW.longitude,
                              created_at = NEW.created_at;
-    END$$
+    END;
 
 DROP TABLE IF EXISTS latest_chair_locations;
 CREATE TABLE latest_chair_locations
@@ -166,9 +165,6 @@ CREATE TABLE latest_ride_statuses
     )
         COMMENT = 'ライドステータスの変更履歴(最新)テーブル';
 
-
-DELIMITER $$
-
 CREATE TRIGGER update_latest_ride_statuses
 AFTER INSERT ON ride_statuses
 FOR EACH ROW
@@ -181,7 +177,7 @@ VALUES (NEW.ride_id, NEW.status, NEW.created_at, NEW.app_sent_at, NEW.chair_sent
                          created_at = NEW.created_at,
                          app_sent_at = NEW.app_sent_at,
                          chair_sent_at = NEW.chair_sent_at;
-END$$
+END;
 
 
 DROP TABLE IF EXISTS owners;
