@@ -12,7 +12,7 @@ build:
 
 truncate-logs:
 	sudo journalctl --vacuum-size=1K
-	ssh isucon-2 journalctl --vacuum-size=1K
+	ssh isucon-2 sudo journalctl --vacuum-size=1K
 	sudo truncate --size 0 /var/log/nginx/access.log
 	sudo truncate --size 0 /var/log/nginx/error.log
 	ssh isucon-2 sudo truncate --size 0 /var/log/mysql/mysql-slow.log && ssh isucon-2 sudo chmod 666 /var/log/mysql/mysql-slow.log
