@@ -931,7 +931,7 @@ INNER JOIN near_chars ON chairs.id = near_chars.chair_id
 LEFT JOIN rides ON chairs.id = rides.chair_id
 JOIN latest_ride_statuses ON rides.id = latest_ride_statuses.ride_id
 WHERE (latest_ride_statuses.status = 'COMPLETED' OR latest_ride_statuses.status IS NULL)
-AND chairs.is_active = true
+AND chairs.is_active=0
 `,
 		lat, lon, distance)
 	if err != nil {
