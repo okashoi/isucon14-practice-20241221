@@ -150,6 +150,23 @@ CREATE TABLE ride_statuses
 )
   COMMENT = 'ライドステータスの変更履歴テーブル';
 
+DROP TABLE IF EXISTS latest_ride_statuses;
+CREATE TABLE latest_ride_statuses
+    (
+        ride_id VARCHAR(26)                                                                        NOT NULL COMMENT 'ライドID',
+        status          ENUM ('MATCHING', 'ENROUTE', 'PICKUP', 'CARRYING', 'ARRIVED', 'COMPLETED') NOT NULL COMMENT '状態',
+        created_at      DATETIME(6)                                                                NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '状態変更日時',
+        app_sent_at     DATETIME(6)                                                                NULL COMMENT 'ユーザーへの状態通知日時',
+        chair_sent_at   DATETIME(6)                                                                NULL COMMENT '椅子への状態通知日時',
+        INDEX (ride_id, created_at),
+        INDEX (ride_id, created_at DESC),
+        INDEX (ride_id, app_sent_at, created_at),
+        INDEX (ride_id, chair_sent_at, created_at),
+        PRIMARY KEY (ride_id)
+    )
+        COMMENT = 'ライドステータスの変更履歴(最新)テーブル';
+
+
 DELIMITER $$
 
 CREATE TRIGGER update_latest_ride_statuses
@@ -166,21 +183,6 @@ VALUES (NEW.ride_id, NEW.status, NEW.created_at, NEW.app_sent_at, NEW.chair_sent
                          chair_sent_at = NEW.chair_sent_at;
 END$$
 
-DROP TABLE IF EXISTS latest_ride_statuses;
-CREATE TABLE latest_ride_statuses
-    (
-        ride_id VARCHAR(26)                                                                        NOT NULL COMMENT 'ライドID',
-        status          ENUM ('MATCHING', 'ENROUTE', 'PICKUP', 'CARRYING', 'ARRIVED', 'COMPLETED') NOT NULL COMMENT '状態',
-        created_at      DATETIME(6)                                                                NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '状態変更日時',
-        app_sent_at     DATETIME(6)                                                                NULL COMMENT 'ユーザーへの状態通知日時',
-        chair_sent_at   DATETIME(6)                                                                NULL COMMENT '椅子への状態通知日時',
-        INDEX (ride_id, created_at),
-        INDEX (ride_id, created_at DESC),
-        INDEX (ride_id, app_sent_at, created_at),
-        INDEX (ride_id, chair_sent_at, created_at),
-        PRIMARY KEY (ride_id)
-    )
-        COMMENT = 'ライドステータスの変更履歴(最新)テーブル';
 
 DROP TABLE IF EXISTS owners;
 CREATE TABLE owners
