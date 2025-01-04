@@ -255,11 +255,6 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE latest_ride_statuses SET chair_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ?`, ride.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
 	}
 
 	if err := tx.Commit(); err != nil {
