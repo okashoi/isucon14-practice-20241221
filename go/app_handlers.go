@@ -469,7 +469,7 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := notifyRideStatus(user); err != nil {
+	if err := notifyRideStatus(user, ""); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -673,7 +673,7 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		log.Printf("failed to get user: %v", err)
 		return
 	}
-	if err := notifyRideStatus(user); err != nil {
+	if err := notifyRideStatus(user, ""); err != nil {
 		log.Printf("failed to notify ride status: %v", err)
 		return
 	}
@@ -745,11 +745,16 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	select {}
 }
 
-func notifyRideStatus(user *User) error {
+func notifyRideStatus(user *User, statusOverride string) error {
 	notifications, err := fetchNotification(context.Background(), user)
 	if err != nil {
 		return err
 	}
+
+	if statusOverride != "" {
+		notifications.Data.Status = statusOverride
+	}
+
 	j, err := json.Marshal(notifications.Data)
 	if err != nil {
 		return err

@@ -147,7 +147,7 @@ func InsertChairLocations() {
 						log.Printf("failed to get user: %v", err)
 						return
 					}
-					if err := notifyRideStatus(user); err != nil {
+					if err := notifyRideStatus(user, "PICKUP"); err != nil {
 						log.Printf("failed to notify ride status: %v", err)
 						return
 					}
@@ -164,7 +164,7 @@ func InsertChairLocations() {
 						log.Printf("failed to get user: %v", err)
 						return
 					}
-					if err := notifyRideStatus(user); err != nil {
+					if err := notifyRideStatus(user, "ARRIVED"); err != nil {
 						log.Printf("failed to notify ride status: %v", err)
 						return
 					}
@@ -382,7 +382,7 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	if err := notifyRideStatus(user); err != nil {
+	if err := notifyRideStatus(user, ""); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
