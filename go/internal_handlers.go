@@ -27,44 +27,35 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		Longitude int    `db:"longitude"`
 	}
 	candidates := []CandidateChair{}
-
 	q := `
-WITH chair_statuses AS (
-	SELECT
-		c.id AS chair_id,
-		lrs.status AS status,
-	FROM
-		chairs c
-	LEFT JOIN
-		rides r ON c.id = r.chair_id
-	LEFT JOIN
-		latest_ride_statuses lrs ON r.id = lrs.ride_id
-	WHERE
-		lrs.created_at = (
-			SELECT
-				MAX(sub_lrs.created_at)
-			FROM
-				latest_ride_statuses sub_lrs
-			WHERE
-				sub_lrs.ride_id = r.id
-		)
-)
 SELECT
-	chairs.id as id,
-	chair_models.speed as speed,
-	latest_chair_locations.latitude as latitude,
-	latest_chair_locations.longitude as longitude
+    c.id AS id,
+    cm.speed AS speed,
+    lcl.latitude AS latitude,
+    lcl.longitude AS longitude
 FROM
-    chairs
-	INNER JOIN chair_models
-        ON chairs.model = chair_models.name
-	INNER JOIN latest_chair_locations
-		ON chairs.id = latest_chair_locations.chair_id
-	LEFT JOIN chair_statuses
-		ON chairs.id = chair_statuses.chair_id
+    chairs c
+	INNER JOIN chair_models cm
+        ON c.model = cm.name
+	LEFT JOIN latest_chair_locations lcl
+	    ON c.id = lcl.chair_id
+	LEFT JOIN (
+		SELECT
+			lrs.status
+		FROM
+			rides r
+		LEFT JOIN latest_ride_statuses lrs ON r.id = lrs.ride_id
+		WHERE
+			r.updated_at = (
+				SELECT MAX(sub_r.updated_at)
+				FROM rides sub_r
+				WHERE sub_r.chair_id = r.chair_id
+			)
+	) latest_rides lr
+		ON c.id = latest_rides.chair_id
 WHERE
-    chairs.is_active = TRUE AND
-    (chair_statuses.status IS NULL OR chair_statuses.status = 'COMPLETED');
+    c.is_active = TRUE AND
+    (lr.status = 'COMPLETED' OR lr.status IS NULL)
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
