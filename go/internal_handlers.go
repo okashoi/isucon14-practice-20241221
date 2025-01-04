@@ -29,6 +29,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	candidates := []CandidateChair{}
 
 	tx := db.MustBegin()
+	defer tx.Rollback()
 	q := `
 SELECT
 	c.id AS id,
