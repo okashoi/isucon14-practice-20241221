@@ -59,8 +59,7 @@ FROM
 		ON c.id = lr.chair_id
 WHERE
 	c.is_active = TRUE AND
-	(lr.status = 'COMPLETED' OR lr.status IS NULL) AND
-	lr.chair_sent_at IS NOT NULL
+	((lr.status = 'COMPLETED' AND lr.chair_sent_at IS NOT NULL) OR lr.status IS NULL)
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
