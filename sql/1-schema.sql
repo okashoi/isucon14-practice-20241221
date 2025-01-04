@@ -214,8 +214,6 @@ BEGIN
     INSERT INTO latest_ride_statuses (ride_id, status, created_at, app_sent_at, chair_sent_at)
     VALUES (NEW.ride_id, NEW.status, NEW.created_at, NEW.app_sent_at, NEW.chair_sent_at)
         ON DUPLICATE KEY UPDATE
-                             status = NEW.status,
-                             created_at = NEW.created_at,
                              app_sent_at = NEW.app_sent_at,
                              chair_sent_at = NEW.chair_sent_at;
     END$$
