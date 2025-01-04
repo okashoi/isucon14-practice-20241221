@@ -31,20 +31,23 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	q := `
 WITH chair_statuses AS (
 	SELECT
-		chair_id,
-		ride_status AS status
-	FROM (
-		SELECT
-			rides.chair_id,
-			ride_statuses.status AS ride_status,
-			ROW_NUMBER() OVER (PARTITION BY chair_id ORDER BY ride_statuses.created_at DESC) AS rn
-		FROM
-			rides
-			INNER JOIN ride_statuses
-				ON rides.id = ride_statuses.ride_id AND ride_statuses.chair_sent_at IS NOT NULL
-	) r
+		c.id AS chair_id,
+		lrs.status AS status,
+	FROM
+		chairs c
+	LEFT JOIN
+		rides r ON c.id = r.chair_id
+	LEFT JOIN
+		latest_ride_statuses lrs ON r.id = lrs.ride_id
 	WHERE
-		r.rn = 1
+		lrs.created_at = (
+			SELECT
+				MAX(sub_lrs.created_at)
+			FROM
+				latest_ride_statuses sub_lrs
+			WHERE
+				sub_lrs.ride_id = r.id
+		)
 )
 SELECT
 	chairs.id as id,
@@ -81,7 +84,9 @@ WHERE
 		var minChairIdx int
 		var minChair *CandidateChair
 		var minEstimatedTime float32
+		// distanceFromPickupToDestination := abs(ride.PickupLatitude-ride.DestinationLatitude) + abs(ride.PickupLongitude-ride.DestinationLongitude)
 		for i, chair := range candidates {
+			// 配車位置までの移動時間を算出
 			distanceToPickup := abs(chair.Latitude-ride.PickupLatitude) + abs(chair.Longitude-ride.PickupLongitude)
 			estimatedTime := float32(distanceToPickup) / float32(chair.Speed)
 			if minChair == nil || estimatedTime < minEstimatedTime {
@@ -91,7 +96,7 @@ WHERE
 			}
 		}
 		if minChair != nil {
-			if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", candidates[minChairIdx].ID, ride.ID); err != nil {
+			if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", minChair.ID, ride.ID); err != nil {
 				writeError(w, http.StatusInternalServerError, err)
 				return
 			}
