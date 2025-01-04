@@ -469,7 +469,7 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := notifyRideStatus(user, ""); err != nil {
+	if err := notifyRideStatus(user); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -673,7 +673,7 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		log.Printf("failed to get user: %v", err)
 		return
 	}
-	if err := notifyRideStatus(user, ""); err != nil {
+	if err := notifyRideStatus(user); err != nil {
 		log.Printf("failed to notify ride status: %v", err)
 		return
 	}
@@ -745,14 +745,10 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	select {}
 }
 
-func notifyRideStatus(user *User, statusOverride string) error {
+func notifyRideStatus(user *User) error {
 	notifications, err := fetchNotification(context.Background(), user)
 	if err != nil {
 		return err
-	}
-
-	if statusOverride != "" {
-		notifications.Data.Status = statusOverride
 	}
 
 	j, err := json.Marshal(notifications.Data)
@@ -821,7 +817,6 @@ func fetchNotification(ctx context.Context, user *User) (*appGetNotificationResp
 	} else {
 		status = yetSentRideStatus.Status
 	}
-	log.Printf("[DEBUG] status: %s", status)
 
 	fare, err := calculateDiscountedFare(ctx, tx, user.ID, ride, ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)
 	if err != nil {
