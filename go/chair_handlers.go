@@ -121,10 +121,15 @@ func InsertChairLocations() {
 		return
 	}
 
+	if err := tx.Commit(); err != nil {
+		log.Printf("failed to commit transaction: %v", err)
+		return
+	}
+
 	for _, req := range jobs {
 		// TODO: N+1問題の修正
 		ride := &Ride{}
-		if err := tx.Get(ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, req.ChairID); err != nil {
+		if err := db.Get(ride, `SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC LIMIT 1`, req.ChairID); err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
 				log.Printf("failed to get ride: %v", err)
 				return
@@ -137,12 +142,12 @@ func InsertChairLocations() {
 			}
 			if status != "COMPLETED" && status != "CANCELED" {
 				if req.Latitude == ride.PickupLatitude && req.Longitude == ride.PickupLongitude && status == "ENROUTE" {
-					if _, err := tx.Exec("INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", ulid.Make().String(), ride.ID, "PICKUP"); err != nil {
+					if _, err := db.Exec("INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", ulid.Make().String(), ride.ID, "PICKUP"); err != nil {
 						log.Printf("failed to insert ride status: %v", err)
 						return
 					}
 					user := &User{}
-					err = tx.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+					err = db.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
 					if err != nil {
 						log.Printf("failed to get user: %v", err)
 						return
@@ -154,12 +159,12 @@ func InsertChairLocations() {
 				}
 
 				if req.Latitude == ride.DestinationLatitude && req.Longitude == ride.DestinationLongitude && status == "CARRYING" {
-					if _, err := tx.Exec("INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", ulid.Make().String(), ride.ID, "ARRIVED"); err != nil {
+					if _, err := db.Exec("INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", ulid.Make().String(), ride.ID, "ARRIVED"); err != nil {
 						log.Printf("failed to insert ride status: %v", err)
 						return
 					}
 					user := &User{}
-					err = tx.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+					err = db.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
 					if err != nil {
 						log.Printf("failed to get user: %v", err)
 						return
@@ -171,11 +176,6 @@ func InsertChairLocations() {
 				}
 			}
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		log.Printf("failed to commit transaction: %v", err)
-		return
 	}
 }
 
