@@ -789,6 +789,8 @@ func notifyToUser(userID string, message []byte) error {
 	}
 	flusher.Flush()
 
+	log.Printf("notified to user %s", userID)
+
 	return nil
 }
 
