@@ -28,6 +28,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	}
 	candidates := []CandidateChair{}
 
+	tx := db.MustBegin()
 	q := `
 SELECT
 	c.id AS id,
@@ -42,10 +43,10 @@ FROM
 		ON c.id = lcl.chair_id
 WHERE
 	c.is_active = TRUE
-    AND ((SELECT COUNT(chair_sent_at) FROM ride_statuses rs INNER JOIN rides as r ON r.id = rs.ride_id WHERE r.chair_id = c.id) % 6 = 0)
+    AND ((SELECT COUNT(chair_sent_at) FROM ride_statuses rs INNER JOIN rides as r ON r.id = rs.ride_id WHERE r.chair_id = c.id) % 6 = 0) FOR UPDATE SKIP LOCKED
 `
 
-	if err := db.SelectContext(ctx, &candidates, q); err != nil {
+	if err := tx.SelectContext(ctx, &candidates, q); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -74,13 +75,18 @@ WHERE
 			}
 		}
 		if minChair != nil {
-			if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", minChair.ID, ride.ID); err != nil {
+			if _, err := tx.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", minChair.ID, ride.ID); err != nil {
 				writeError(w, http.StatusInternalServerError, err)
 				return
 			}
 
 			candidates = append(candidates[:minChairIdx], candidates[minChairIdx+1:]...)
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
