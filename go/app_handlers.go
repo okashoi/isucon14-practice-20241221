@@ -464,49 +464,12 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// SSEでユーザに通知
-	yetSentRideStatus := RideStatus{}
-	status := ""
-	if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			status, err = getLatestRideStatus(ctx, tx, ride.ID)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, err)
-				return
-			}
-		} else {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-	} else {
-		status = yetSentRideStatus.Status
-	}
-	notification := appGetNotificationResponseData{
-		RideID: ride.ID,
-		PickupCoordinate: Coordinate{
-			Latitude:  ride.PickupLatitude,
-			Longitude: ride.PickupLongitude,
-		},
-		DestinationCoordinate: Coordinate{
-			Latitude:  ride.DestinationLatitude,
-			Longitude: ride.DestinationLongitude,
-		},
-		Fare:      fare,
-		Status:    status,
-		CreatedAt: ride.CreatedAt.UnixMilli(),
-		UpdateAt:  ride.UpdatedAt.UnixMilli(),
-	}
-	j, err := json.Marshal(notification)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if err := notifyToUser(user.ID, j); err != nil {
+	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := notifyRideStatus(user); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -704,6 +667,17 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user := &User{}
+	err = tx.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+	if err != nil {
+		log.Printf("failed to get user: %v", err)
+		return
+	}
+	if err := notifyRideStatus(user); err != nil {
+		log.Printf("failed to notify ride status: %v", err)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, &appPostRideEvaluationResponse{
 		CompletedAt: ride.UpdatedAt.UnixMilli(),
 	})
@@ -769,6 +743,23 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	select {}
+}
+
+func notifyRideStatus(user *User) error {
+	notifications, err := fetchNotification(context.Background(), user)
+	if err != nil {
+		return err
+	}
+	j, err := json.Marshal(notifications.Data)
+	if err != nil {
+		return err
+	}
+
+	if err := notifyToUser(user.ID, j); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func notifyToUser(userID string, message []byte) error {

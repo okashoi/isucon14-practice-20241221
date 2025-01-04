@@ -141,11 +141,31 @@ func InsertChairLocations() {
 						log.Printf("failed to insert ride status: %v", err)
 						return
 					}
+					user := &User{}
+					err = tx.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+					if err != nil {
+						log.Printf("failed to get user: %v", err)
+						return
+					}
+					if err := notifyRideStatus(user); err != nil {
+						log.Printf("failed to notify ride status: %v", err)
+						return
+					}
 				}
 
 				if req.Latitude == ride.DestinationLatitude && req.Longitude == ride.DestinationLongitude && status == "CARRYING" {
 					if _, err := tx.Exec("INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", ulid.Make().String(), ride.ID, "ARRIVED"); err != nil {
 						log.Printf("failed to insert ride status: %v", err)
+						return
+					}
+					user := &User{}
+					err = tx.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+					if err != nil {
+						log.Printf("failed to get user: %v", err)
+						return
+					}
+					if err := notifyRideStatus(user); err != nil {
+						log.Printf("failed to notify ride status: %v", err)
 						return
 					}
 				}
@@ -352,6 +372,17 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	user := &User{}
+	err = tx.GetContext(ctx, user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if err := notifyRideStatus(user); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
