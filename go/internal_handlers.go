@@ -11,7 +11,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	rides := []Ride{}
-	if err := db.SelectContext(ctx, &rides, `SELECT * FROM rides WHERE chair_id IS NULL`); err != nil {
+	if err := db.SelectContext(ctx, &rides, `SELECT * FROM rides WHERE chair_id IS NULL `); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -84,6 +84,9 @@ FOR UPDATE SKIP LOCKED
 			}
 
 			candidates = append(candidates[:minChairIdx], candidates[minChairIdx+1:]...)
+			if len(candidates) == 0 {
+				break
+			}
 		}
 	}
 
