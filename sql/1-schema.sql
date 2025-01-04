@@ -212,8 +212,11 @@ BEGIN
                              app_sent_at = NEW.app_sent_at,
                              chair_sent_at = NEW.chair_sent_at;
     END$$
+DELIMITER ;
 
 DROP TRIGGER IF EXISTS update_latest_ride_statuses_2;
+DELIMITER $$
+
 CREATE TRIGGER update_latest_ride_statuses_2
     AFTER UPDATE ON ride_statuses
     FOR EACH ROW
