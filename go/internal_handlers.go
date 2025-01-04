@@ -64,7 +64,7 @@ FROM
 		ON chairs.id = chair_statuses.chair_id
 WHERE
     chairs.is_active = TRUE AND
-    chair_statuses.status IS NULL OR chair_statuses.status = 'COMPLETED';
+    (chair_statuses.status IS NULL OR chair_statuses.status = 'COMPLETED');
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
