@@ -867,6 +867,10 @@ func fetchNotification(ctx context.Context, user *User) (*appGetNotificationResp
 		if err != nil {
 			return nil, err
 		}
+		_, err = tx.ExecContext(ctx, `UPDATE latest_ride_statuses SET app_sent_at = CURRENT_TIMESTAMP(6) WHERE ride_id = ?`, ride.ID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
