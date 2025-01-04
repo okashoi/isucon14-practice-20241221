@@ -97,9 +97,9 @@ WHERE
 				writeError(w, http.StatusInternalServerError, err)
 				return
 			}
-		}
 
-		candidates = append(candidates[:minChairIdx], candidates[minChairIdx+1:]...)
+			candidates = append(candidates[:minChairIdx], candidates[minChairIdx+1:]...)
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
