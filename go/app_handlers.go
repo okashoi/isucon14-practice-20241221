@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -467,6 +468,48 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SSEでユーザに通知
+	yetSentRideStatus := RideStatus{}
+	status := ""
+	if err := tx.GetContext(ctx, &yetSentRideStatus, `SELECT * FROM ride_statuses WHERE ride_id = ? AND app_sent_at IS NULL ORDER BY created_at ASC LIMIT 1`, ride.ID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			status, err = getLatestRideStatus(ctx, tx, ride.ID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+		} else {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+	} else {
+		status = yetSentRideStatus.Status
+	}
+	notification := appGetNotificationResponseData{
+		RideID: ride.ID,
+		PickupCoordinate: Coordinate{
+			Latitude:  ride.PickupLatitude,
+			Longitude: ride.PickupLongitude,
+		},
+		DestinationCoordinate: Coordinate{
+			Latitude:  ride.DestinationLatitude,
+			Longitude: ride.DestinationLongitude,
+		},
+		Fare:      fare,
+		Status:    status,
+		CreatedAt: ride.CreatedAt.UnixMilli(),
+		UpdateAt:  ride.UpdatedAt.UnixMilli(),
+	}
+	j, err := json.Marshal(notification)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if err := notifyToUser(user.ID, j); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	writeJSON(w, http.StatusAccepted, &appPostRidesResponse{
 		RideID: rideID,
 		Fare:   fare,
@@ -693,9 +736,14 @@ type appGetNotificationResponseChairStats struct {
 	TotalEvaluationAvg float64 `json:"total_evaluation_avg"`
 }
 
+var (
+	userNotificationStreamMap sync.Map // UserID -> *http.ResponseWriter
+)
+
 func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := ctx.Value("user").(*User)
+	userNotificationStreamMap.Store(user.ID, &w)
 
 	// ヘッダーの設定
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -703,55 +751,43 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeError(w, http.StatusInternalServerError, errors.New("expected http.ResponseWriter to be an http.Flusher"))
+	notifications, err := fetchNotification(ctx, user)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	j, err := json.Marshal(notifications.Data)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	// イベント送信用のチャンネルを作成
-	events := make(chan *appGetNotificationResponse)
-	defer close(events)
-
-	// イベント生成用ゴルーチン
-	go func() {
-		ticker := time.NewTicker(300 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				response, err := fetchNotification(ctx, user)
-				if err != nil {
-					// エラーハンドリング（必要に応じてログを出力）
-					continue
-				}
-				events <- response
-			}
-		}
-	}()
-
-	// イベント送信ループ
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event := <-events:
-			// 再接続のタイミングを設定（必要に応じて）
-			if event.RetryAfterMs > 0 {
-				fmt.Fprintf(w, "retry: %d\n", event.RetryAfterMs)
-			}
-			// データをSSEフォーマットで送信
-			data, err := json.Marshal(event.Data)
-			if err != nil {
-				// JSONエンコードエラーのハンドリング
-				continue
-			}
-			fmt.Fprintf(w, "data: %s\n\n", data)
-			flusher.Flush()
-		}
+	if err := notifyToUser(user.ID, string(j)); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
+
+	select {}
+}
+
+func notifyToUser(userID string, message string) error {
+	stream, ok := userNotificationStreamMap.Load(userID)
+	if !ok {
+		return errors.New("user is not connected")
+	}
+
+	responseWriter := *stream.(*http.ResponseWriter)
+
+	if _, err := fmt.Fprintf(responseWriter, "data: %s\n\n", message); err != nil {
+		return err
+	}
+	flusher, ok := responseWriter.(http.Flusher)
+	if !ok {
+		return errors.New("expected http.ResponseWriter to be an http.Flusher")
+	}
+	flusher.Flush()
+
+	return nil
 }
 
 func fetchNotification(ctx context.Context, user *User) (*appGetNotificationResponse, error) {
