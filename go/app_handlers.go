@@ -463,11 +463,6 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := tx.Commit(); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
 	// SSEでユーザに通知
 	yetSentRideStatus := RideStatus{}
 	status := ""
@@ -506,6 +501,11 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := notifyToUser(user.ID, j); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
