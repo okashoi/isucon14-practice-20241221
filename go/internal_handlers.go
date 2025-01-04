@@ -40,26 +40,9 @@ FROM
 		ON c.model = cm.name
 	LEFT JOIN latest_chair_locations lcl
 		ON c.id = lcl.chair_id
-	LEFT JOIN (
-		SELECT
-			r.chair_id,
-			lrs.status,
-			lrs.chair_sent_at
-		FROM
-			rides r
-		LEFT JOIN latest_ride_statuses lrs
-				ON r.id = lrs.ride_id
-		WHERE
-			r.created_at = (
-				SELECT MAX(sub_r.created_at)
-				FROM rides sub_r
-				WHERE sub_r.chair_id = r.chair_id
-			)
-	) lr
-		ON c.id = lr.chair_id
 WHERE
-	c.is_active = TRUE AND
-	((lr.status = 'COMPLETED' AND lr.chair_sent_at IS NOT NULL) OR lr.status IS NULL)
+	c.is_active = TRUE
+    AND ((SELECT COUNT(chair_sent_at) FROM ride_statuses rs INNER JOIN rideds as r ON r.id = rs.ride_id WHERE r.chair_id = c.id) % 6 = 0)
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
