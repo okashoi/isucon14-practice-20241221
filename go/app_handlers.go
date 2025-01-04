@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -467,6 +469,11 @@ func appPostRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := notifyRideStatus(user); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	writeJSON(w, http.StatusAccepted, &appPostRidesResponse{
 		RideID: rideID,
 		Fare:   fare,
@@ -660,6 +667,17 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user := &User{}
+	err = db.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+	if err != nil {
+		log.Printf("failed to get user: %v", err)
+		return
+	}
+	if err := notifyRideStatus(user); err != nil {
+		log.Printf("failed to notify ride status: %v", err)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, &appPostRideEvaluationResponse{
 		CompletedAt: ride.UpdatedAt.UnixMilli(),
 	})
@@ -693,9 +711,14 @@ type appGetNotificationResponseChairStats struct {
 	TotalEvaluationAvg float64 `json:"total_evaluation_avg"`
 }
 
+var (
+	userNotificationStreamMap sync.Map // UserID -> *http.ResponseWriter
+)
+
 func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := ctx.Value("user").(*User)
+	userNotificationStreamMap.Store(user.ID, &w)
 
 	// ヘッダーの設定
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -703,55 +726,64 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeError(w, http.StatusInternalServerError, errors.New("expected http.ResponseWriter to be an http.Flusher"))
+	notifications, err := fetchNotification(ctx, user)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	j, err := json.Marshal(notifications.Data)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	// イベント送信用のチャンネルを作成
-	events := make(chan *appGetNotificationResponse)
-	defer close(events)
-
-	// イベント生成用ゴルーチン
-	go func() {
-		ticker := time.NewTicker(300 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				response, err := fetchNotification(ctx, user)
-				if err != nil {
-					// エラーハンドリング（必要に応じてログを出力）
-					continue
-				}
-				events <- response
-			}
-		}
-	}()
-
-	// イベント送信ループ
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event := <-events:
-			// 再接続のタイミングを設定（必要に応じて）
-			if event.RetryAfterMs > 0 {
-				fmt.Fprintf(w, "retry: %d\n", event.RetryAfterMs)
-			}
-			// データをSSEフォーマットで送信
-			data, err := json.Marshal(event.Data)
-			if err != nil {
-				// JSONエンコードエラーのハンドリング
-				continue
-			}
-			fmt.Fprintf(w, "data: %s\n\n", data)
-			flusher.Flush()
-		}
+	if err := notifyToUser(user.ID, j); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
+
+	select {}
+}
+
+func notifyRideStatus(user *User) error {
+	notifications, err := fetchNotification(context.Background(), user)
+	if err != nil {
+		return err
+	}
+
+	j, err := json.Marshal(notifications.Data)
+	if err != nil {
+		return err
+	}
+
+	if err := notifyToUser(user.ID, j); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func notifyToUser(userID string, message []byte) error {
+	stream, ok := userNotificationStreamMap.Load(userID)
+	if !ok {
+		log.Printf("stream not found for user %s", userID)
+		return nil
+	}
+
+	responseWriter := *stream.(*http.ResponseWriter)
+
+	if _, err := fmt.Fprintf(responseWriter, "data: %s\n\n", message); err != nil {
+		return err
+	}
+	flusher, ok := responseWriter.(http.Flusher)
+	if !ok {
+		return errors.New("expected http.ResponseWriter to be an http.Flusher")
+	}
+	flusher.Flush()
+
+	log.Printf("notified to user %s", userID)
+
+	return nil
 }
 
 func fetchNotification(ctx context.Context, user *User) (*appGetNotificationResponse, error) {
