@@ -42,7 +42,7 @@ FROM
 		ON c.id = lcl.chair_id
 WHERE
 	c.is_active = TRUE
-    AND ((SELECT COUNT(chair_sent_at) FROM ride_statuses rs INNER JOIN rides as r ON r.id = rs.ride_id WHERE r.chair_id = c.id) % 6 = 1)
+    AND ((SELECT COUNT(chair_sent_at) FROM ride_statuses rs INNER JOIN rides as r ON r.id = rs.ride_id WHERE r.chair_id = c.id) % 6 = 0)
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
