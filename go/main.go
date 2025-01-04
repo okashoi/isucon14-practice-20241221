@@ -156,6 +156,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	TokenCache.Clear()
+	ChairTokenCache.Clear()
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 
 }
