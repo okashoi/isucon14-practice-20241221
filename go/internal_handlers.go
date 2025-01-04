@@ -69,7 +69,7 @@ WHERE
 
 	// 移動時間が最も短いものを 1 件取得
 	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].EstimatedTime < candidates[j].EstimatedTime
+		return candidates[i].EstimatedTime > candidates[j].EstimatedTime
 	})
 
 	var matched CandidateChair
