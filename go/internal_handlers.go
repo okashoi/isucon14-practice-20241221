@@ -31,11 +31,11 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	q := `
 WITH chair_statuses AS (
 	SELECT
-		rides.chair_id AS chair_id,
+		chair_id,
 		ride_status AS status
 	FROM (
 		SELECT
-			rides.*,
+			rides.chair_id,
 			ride_statuses.status AS ride_status,
 			ROW_NUMBER() OVER (PARTITION BY chair_id ORDER BY ride_statuses.created_at DESC) AS rn
 		FROM
