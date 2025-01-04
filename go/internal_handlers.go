@@ -30,18 +30,18 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 			Speed                int    `db:"speed"`
 			CurrentLatitude      int    `db:"latitude"`
 			CurrentLongitude     int    `db:"longitude"`
-			DestinationLatitude  int
-			DestinationLongitude int
+			DestinationLatitude  int    `db:"destination_latitude"`
+			DestinationLongitude int    `db:"destination_longitude"`
 			EstimatedTime        float32
 		}
 		candidates := make([]CandidateChair, 0)
 
 		q := `
 SELECT
-	chairs.id as id,
-	chair_models.speed as speed,
-	latest_chair_locations.latitude as latitude,
-	latest_chair_locations.longitude as longitude,
+	chairs.id AS id,
+	chair_models.speed AS speed,
+	latest_chair_locations.latitude AS latitude,
+	latest_chair_locations.longitude AS longitude,
 	COALESCE(
 		rides.destination_latitude, 
 		latest_chair_locations.latitude
