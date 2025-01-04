@@ -9,6 +9,7 @@ import (
 )
 
 var TokenCache sync.Map
+var ChairTokenCache sync.Map
 
 func appAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +84,14 @@ func chairAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		accessToken := c.Value
+		// キャッシュをチェック
+		if cachedChair, ok := ChairTokenCache.Load(accessToken); ok {
+			if chair, valid := cachedChair.(*Chair); valid {
+				ctx = context.WithValue(ctx, "chair", chair)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+		}
 		chair := &Chair{}
 		err = db.GetContext(ctx, chair, "SELECT * FROM chairs WHERE access_token = ?", accessToken)
 		if err != nil {
@@ -93,7 +102,8 @@ func chairAuthMiddleware(next http.Handler) http.Handler {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-
+		// キャッシュに保存
+		ChairTokenCache.Store(accessToken, chair)
 		ctx = context.WithValue(ctx, "chair", chair)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
