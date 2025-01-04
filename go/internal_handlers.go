@@ -42,14 +42,8 @@ SELECT
 	chair_models.speed AS speed,
 	latest_chair_locations.latitude AS latitude,
 	latest_chair_locations.longitude AS longitude,
-	COALESCE(
-		rides.destination_latitude, 
-		latest_chair_locations.latitude
-	) AS destination_latitude,
-	COALESCE(
-		rides.destination_longitude, 
-		latest_chair_locations.longitude
-	) AS destination_longitude
+	COALESCE(rides.destination_latitude, latest_chair_locations.latitude) AS destination_latitude,
+	COALESCE(rides.destination_longitude, latest_chair_locations.longitude) AS destination_longitude
 FROM
 	chairs
 	INNER JOIN chair_models
