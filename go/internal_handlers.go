@@ -43,14 +43,15 @@ FROM
 	LEFT JOIN (
 		SELECT
 			r.chair_id,
-			lrs.status
+			lrs.status,
+			lrs.chair_sent_at
 		FROM
 			rides r
 		LEFT JOIN latest_ride_statuses lrs
-				ON r.id = lrs.ride_id AND lrs.chair_sent_at IS NOT NULL
+				ON r.id = lrs.ride_id
 		WHERE
-			r.updated_at = (
-				SELECT MAX(sub_r.updated_at)
+			r.created_at = (
+				SELECT MAX(sub_r.created_at)
 				FROM rides sub_r
 				WHERE sub_r.chair_id = r.chair_id
 			)
@@ -58,7 +59,8 @@ FROM
 		ON c.id = lr.chair_id
 WHERE
 	c.is_active = TRUE AND
-	(lr.status = 'COMPLETED' OR lr.status IS NULL)
+	(lr.status = 'COMPLETED' OR lr.status IS NULL) AND
+	lr.chair_sent_at IS NOT NULL
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
