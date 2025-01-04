@@ -42,8 +42,14 @@ SELECT
 	chair_models.speed as speed,
 	latest_chair_locations.latitude as latitude,
 	latest_chair_locations.longitude as longitude,
-	COALESCE(rides.destination_latitude, latest_chair_locations.latitude) AS destination_latitude,
-	COALESCE(rides.destination_longitude, latest_chair_locations.longitude) AS destination_longitude
+	COALESCE(
+		rides.destination_latitude, 
+		latest_chair_locations.latitude
+	) AS destination_latitude,
+	COALESCE(
+		rides.destination_longitude, 
+		latest_chair_locations.longitude
+	) AS destination_longitude
 FROM
 	chairs
 	INNER JOIN chair_models
@@ -51,9 +57,12 @@ FROM
 	INNER JOIN latest_chair_locations
 		ON chairs.id = latest_chair_locations.chair_id
 	LEFT JOIN rides
-		ON chairs.id = rides.chair_id AND rides.status != 'completed'
+		ON chairs.id = rides.chair_id
+	LEFT JOIN latest_ride_statuses
+		ON rides.id = latest_ride_statuses.ride_id
 WHERE
 	chairs.is_active = TRUE
+	AND (latest_ride_statuses.status IS NULL OR latest_ride_statuses.status = 'COMPLETED')
 `
 		if err := db.SelectContext(ctx, &candidates, q); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
