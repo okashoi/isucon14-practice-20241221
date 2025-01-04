@@ -51,7 +51,7 @@ FROM
 	INNER JOIN latest_chair_locations
 		ON chairs.id = latest_chair_locations.chair_id
 	LEFT JOIN rides
-		ON chairs.id = rides.chair_id AND rides.completed_at IS NULL
+		ON chairs.id = rides.chair_id AND rides.status != 'completed'
 WHERE
 	chairs.is_active = TRUE
 `
