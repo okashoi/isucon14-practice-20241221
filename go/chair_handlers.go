@@ -109,20 +109,8 @@ func InsertChairLocations() {
 	chairLocations = make([]ChairLocation, 0)
 	chairLocationMutex.Unlock()
 
-	tx, err := db.Beginx()
-	if err != nil {
-		log.Printf("failed to start transaction: %v", err)
-		return
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.NamedExec(`INSERT INTO chair_locations (id, chair_id, latitude, longitude, created_at) VALUES (:id, :chair_id, :latitude, :longitude, :created_at)`, jobs); err != nil {
+	if _, err := db.NamedExec(`INSERT INTO chair_locations (id, chair_id, latitude, longitude, created_at) VALUES (:id, :chair_id, :latitude, :longitude, :created_at)`, jobs); err != nil {
 		log.Printf("failed to insert chair location: %v", err)
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		log.Printf("failed to commit transaction: %v", err)
 		return
 	}
 
@@ -135,7 +123,7 @@ func InsertChairLocations() {
 				return
 			}
 		} else {
-			status, err := getLatestRideStatus(context.Background(), tx, ride.ID)
+			status, err := getLatestRideStatus(context.Background(), db, ride.ID)
 			if err != nil {
 				log.Printf("failed to get latest ride status: %v", err)
 				return
