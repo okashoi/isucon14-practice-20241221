@@ -27,25 +27,27 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		Longitude int    `db:"longitude"`
 	}
 	candidates := []CandidateChair{}
+
 	q := `
 SELECT
-    c.id AS id,
-    cm.speed AS speed,
-    lcl.latitude AS latitude,
-    lcl.longitude AS longitude
+	c.id AS id,
+	cm.speed AS speed,
+	lcl.latitude AS latitude,
+	lcl.longitude AS longitude
 FROM
-    chairs c
+	chairs c
 	INNER JOIN chair_models cm
-        ON c.model = cm.name
+		ON c.model = cm.name
 	LEFT JOIN latest_chair_locations lcl
-	    ON c.id = lcl.chair_id
+		ON c.id = lcl.chair_id
 	LEFT JOIN (
 		SELECT
 			r.chair_id,
 			lrs.status
 		FROM
 			rides r
-		LEFT JOIN latest_ride_statuses lrs ON r.id = lrs.ride_id
+		LEFT JOIN latest_ride_statuses lrs
+				ON r.id = lrs.ride_id AND lrs.chair_sent_at IS NOT NULL
 		WHERE
 			r.updated_at = (
 				SELECT MAX(sub_r.updated_at)
@@ -55,8 +57,8 @@ FROM
 	) lr
 		ON c.id = lr.chair_id
 WHERE
-    c.is_active = TRUE AND
-    (lr.status = 'COMPLETED' OR lr.status IS NULL)
+	c.is_active = TRUE AND
+	(lr.status = 'COMPLETED' OR lr.status IS NULL)
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
