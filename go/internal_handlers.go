@@ -51,8 +51,8 @@ FROM
 				FROM rides sub_r
 				WHERE sub_r.chair_id = r.chair_id
 			)
-	) latest_rides lr
-		ON c.id = latest_rides.chair_id
+	) lr
+		ON c.id = lr.chair_id
 WHERE
     c.is_active = TRUE AND
     (lr.status = 'COMPLETED' OR lr.status IS NULL)
