@@ -304,7 +304,6 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 	req := &postChairRidesRideIDStatusRequest{}
 	if err := bindJSON(r, req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
-		log.Println("invalid JSON")
 		return
 	}
 
@@ -327,7 +326,6 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 
 	if ride.ChairID.String != chair.ID {
 		writeError(w, http.StatusBadRequest, errors.New("not assigned to this ride"))
-		log.Println("not assigned to this ride")
 		return
 	}
 
@@ -348,7 +346,6 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		if status != "PICKUP" {
 			writeError(w, http.StatusBadRequest, errors.New("chair has not arrived yet"))
-			log.Println("chair has not arrived yet")
 			return
 		}
 		if _, err := tx.ExecContext(ctx, "INSERT INTO ride_statuses (id, ride_id, status) VALUES (?, ?, ?)", ulid.Make().String(), ride.ID, "CARRYING"); err != nil {
@@ -358,7 +355,6 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 		setLatestChairStatusNotSent(chair.ID, "CARRYING")
 	default:
 		writeError(w, http.StatusBadRequest, errors.New("invalid status"))
-		log.Println("invalid status")
 	}
 
 	if err := tx.Commit(); err != nil {
