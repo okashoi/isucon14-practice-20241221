@@ -762,7 +762,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := notifyToUser(user.ID, string(j)); err != nil {
+	if err := notifyToUser(user.ID, j); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -770,7 +770,7 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 	select {}
 }
 
-func notifyToUser(userID string, message string) error {
+func notifyToUser(userID string, message []byte) error {
 	stream, ok := userNotificationStreamMap.Load(userID)
 	if !ok {
 		return errors.New("user is not connected")
