@@ -62,9 +62,9 @@ WHERE
 
 	// distanceFromPickupToDestination := abs(ride.PickupLatitude-ride.DestinationLatitude) + abs(ride.PickupLongitude-ride.DestinationLongitude)
 	// 配車位置までの移動時間を算出
-	for _, chair := range candidates {
+	for i, chair := range candidates {
 		distanceToPickup := abs(chair.Latitude-ride.PickupLatitude) + abs(chair.Longitude-ride.PickupLongitude)
-		chair.EstimatedTime = float32(distanceToPickup) / float32(chair.Speed)
+		candidates[i].EstimatedTime = float32(distanceToPickup) / float32(chair.Speed)
 	}
 
 	// 移動時間が最も短いものを 1 件取得
