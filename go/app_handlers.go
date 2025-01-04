@@ -668,7 +668,7 @@ func appPostRideEvaluatation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := &User{}
-	err = tx.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+	err = db.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
 	if err != nil {
 		log.Printf("failed to get user: %v", err)
 		return
