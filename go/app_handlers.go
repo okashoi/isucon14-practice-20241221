@@ -947,15 +947,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 
 	coordinate := Coordinate{Latitude: lat, Longitude: lon}
 
-	// トランザクションの必要性を再評価（読み取り専用の場合は不要）
-	// tx, err := db.Beginx()
-	// if err != nil {
-	//     writeError(w, http.StatusInternalServerError, err)
-	//     return
-	// }
-	// defer tx.Rollback()
-
-	// アクティブな椅子とその最新の位置情報を一括で取得
 	chairsQuery := `
         SELECT c.id, c.name, c.model, cl.latitude, cl.longitude
         FROM chairs c
@@ -985,20 +976,17 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 椅子IDのリストを取得
 	chairIDs := make([]string, len(chairs))
 	for i, chair := range chairs {
 		chairIDs[i] = chair.ID
 	}
 
-	// 椅子ごとの最新のライドステータスを一括で取得
 	ridesQuery := `
         SELECT r.chair_id, lrs.status
         FROM rides r
         JOIN latest_ride_statuses lrs ON r.id = lrs.ride_id
         WHERE r.chair_id IN (?)
     `
-	// SQL IN句用のプレースホルダを生成
 	query, args, err := sqlx.In(ridesQuery, chairIDs)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -1017,7 +1005,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 椅子ごとにステータスをマップ化
 	chairStatusMap := make(map[string][]string)
 	for _, rs := range rideStatuses {
 		chairStatusMap[rs.ChairID] = append(chairStatusMap[rs.ChairID], rs.Status)
@@ -1025,7 +1012,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 
 	nearbyChairs := []appGetNearbyChairsResponseChair{}
 	for _, chair := range chairs {
-		// ライドステータスをチェック
 		statuses, exists := chairStatusMap[chair.ID]
 		if exists {
 			hasOngoingRide := false
@@ -1040,7 +1026,6 @@ func appGetNearbyChairs(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// 距離を計算
 		if calculateDistance(coordinate.Latitude, coordinate.Longitude, chair.Latitude, chair.Longitude) <= distance {
 			nearbyChairs = append(nearbyChairs, appGetNearbyChairsResponseChair{
 				ID:    chair.ID,
