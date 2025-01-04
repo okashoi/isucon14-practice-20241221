@@ -26,11 +26,13 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 
 		// 候補となる椅子を取得
 		type CandidateChair struct {
-			ID            string `db:"id"`
-			Speed         int    `db:"speed"`
-			Latitude      int    `db:"latitude"`
-			Longitude     int    `db:"longitude"`
-			EstimatedTime float32
+			ID                   string `db:"id"`
+			Speed                int    `db:"speed"`
+			CurrentLatitude      int    `db:"latitude"`
+			CurrentLongitude     int    `db:"longitude"`
+			DestinationLatitude  int
+			DestinationLongitude int
+			EstimatedTime        float32
 		}
 		candidates := make([]CandidateChair, 0)
 
@@ -39,13 +41,17 @@ SELECT
 	chairs.id as id,
 	chair_models.speed as speed,
 	latest_chair_locations.latitude as latitude,
-	latest_chair_locations.longitude as longitude
+	latest_chair_locations.longitude as longitude,
+	COALESCE(rides.destination_latitude, latest_chair_locations.latitude) AS destination_latitude,
+	COALESCE(rides.destination_longitude, latest_chair_locations.longitude) AS destination_longitude
 FROM
 	chairs
 	INNER JOIN chair_models
 		ON chairs.model = chair_models.name
 	INNER JOIN latest_chair_locations
 		ON chairs.id = latest_chair_locations.chair_id
+	LEFT JOIN rides
+		ON chairs.id = rides.chair_id AND rides.completed_at IS NULL
 WHERE
 	chairs.is_active = TRUE
 `
@@ -64,9 +70,10 @@ WHERE
 			return
 		}
 
-		// 配車位置までの移動時間を算出
+		// 移動時間を算出（現在の目的地から次の乗車位置まで）
 		for i, chair := range candidates {
-			distanceToPickup := abs(chair.Latitude-ride.PickupLatitude) + abs(chair.Longitude-ride.PickupLongitude)
+			// 現在の目的地から次の乗車位置までの距離
+			distanceToPickup := abs(chair.DestinationLatitude-ride.PickupLatitude) + abs(chair.DestinationLongitude-ride.PickupLongitude)
 			candidates[i].EstimatedTime = float32(distanceToPickup) / float32(chair.Speed)
 		}
 
@@ -76,28 +83,15 @@ WHERE
 		})
 
 		var matched CandidateChair
-		empty := false
+		found := false
 		for _, candidate := range candidates {
-			if err := db.GetContext(ctx, &empty, `
-SELECT COUNT(*) = 0
-FROM (
-	SELECT COUNT(chair_sent_at) = 6 AS completed
-	FROM ride_statuses
-	WHERE ride_id IN (
-		SELECT id FROM rides WHERE chair_id = ?
-	) GROUP BY ride_id
-) is_completed
-WHERE completed = FALSE
-`, candidate.ID); err != nil {
-				writeError(w, http.StatusInternalServerError, err)
-				return
-			}
-			if empty {
-				matched = candidate
-				break
-			}
+			// 適切な椅子が見つかった場合に選択
+			matched = candidate
+			found = true
+			break
 		}
-		if !empty {
+
+		if !found {
 			// マッチングできる椅子がない場合
 			w.WriteHeader(http.StatusNoContent)
 			return
