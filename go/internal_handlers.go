@@ -32,8 +32,8 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 SELECT
 	c.id AS id,
 	cm.speed AS speed,
-	lcl.latitude AS latitude,
-	lcl.longitude AS longitude
+	ifnull(lcl.latitude, 0) AS latitude,
+	ifnull(lcl.longitude, 0) AS longitude
 FROM
 	chairs c
 	INNER JOIN chair_models cm
