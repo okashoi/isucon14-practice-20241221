@@ -170,6 +170,7 @@ CREATE TABLE coupons
 )
   COMMENT 'クーポンテーブル';
 
+DROP TRIGGER IF EXISTS update_latest_chair_locations;
 DELIMITER $$
 
 CREATE TRIGGER update_latest_chair_locations
@@ -190,6 +191,7 @@ BEGIN
 
     DELIMITER ;
 
+DROP TRIGGER IF EXISTS update_latest_ride_statuses;
 DELIMITER $$
 
 CREATE TRIGGER update_latest_ride_statuses
@@ -206,6 +208,7 @@ BEGIN
                              chair_sent_at = NEW.chair_sent_at;
     END$$
 
+DROP TRIGGER IF EXISTS update_latest_ride_statuses_2;
 CREATE TRIGGER update_latest_ride_statuses_2
     AFTER UPDATE ON ride_statuses
     FOR EACH ROW
