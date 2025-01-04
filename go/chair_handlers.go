@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -108,20 +109,8 @@ func InsertChairLocations() {
 	chairLocations = make([]ChairLocation, 0)
 	chairLocationMutex.Unlock()
 
-	tx, err := db.Beginx()
-	if err != nil {
-		log.Printf("failed to start transaction: %v", err)
-		return
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.NamedExec(`INSERT INTO chair_locations (id, chair_id, latitude, longitude, created_at) VALUES (:id, :chair_id, :latitude, :longitude, :created_at)`, jobs); err != nil {
+	if _, err := db.NamedExec(`INSERT INTO chair_locations (id, chair_id, latitude, longitude, created_at) VALUES (:id, :chair_id, :latitude, :longitude, :created_at)`, jobs); err != nil {
 		log.Printf("failed to insert chair location: %v", err)
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		log.Printf("failed to commit transaction: %v", err)
 		return
 	}
 }
@@ -172,9 +161,20 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
+
+			user := &User{}
+			err = db.GetContext(context.Background(), user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+			if err != nil {
+				log.Printf("failed to get user: %v", err)
+				return
+			}
+			if err := notifyRideStatus(user); err != nil {
+				log.Printf("failed to notify ride status: %v", err)
+				return
+			}
 		}
 	}
-	
+
 	chairLocationMutex.Lock()
 	chairLocations = append(chairLocations, l)
 	chairLocationMutex.Unlock()
@@ -348,6 +348,17 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	user := &User{}
+	err = db.GetContext(ctx, user, "SELECT * FROM users WHERE id = ? FOR SHARE", ride.UserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if err := notifyRideStatus(user); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
