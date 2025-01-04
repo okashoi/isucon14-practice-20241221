@@ -5,7 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"sync"
 )
+
+var TokenCache sync.Map
 
 func appAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -16,6 +19,17 @@ func appAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		accessToken := c.Value
+
+		// キャッシュをチェック
+		if cachedUser, ok := TokenCache.Load(accessToken); ok {
+			if user, valid := cachedUser.(*User); valid {
+				ctx = context.WithValue(ctx, "user", user)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+		}
+
+		// データベースから取得
 		user := &User{}
 		err = db.GetContext(ctx, user, "SELECT * FROM users WHERE access_token = ?", accessToken)
 		if err != nil {
@@ -27,6 +41,10 @@ func appAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// キャッシュに保存
+		TokenCache.Store(accessToken, user)
+
+		// コンテキストに追加
 		ctx = context.WithValue(ctx, "user", user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
