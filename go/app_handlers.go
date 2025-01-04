@@ -816,6 +816,7 @@ func fetchNotification(ctx context.Context, user *User) (*appGetNotificationResp
 	} else {
 		status = yetSentRideStatus.Status
 	}
+	log.Printf("[DEBUG] status: %s", status)
 
 	fare, err := calculateDiscountedFare(ctx, tx, user.ID, ride, ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)
 	if err != nil {
