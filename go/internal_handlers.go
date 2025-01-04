@@ -41,6 +41,7 @@ FROM
 	    ON c.id = lcl.chair_id
 	LEFT JOIN (
 		SELECT
+			r.chair_id,
 			lrs.status
 		FROM
 			rides r
