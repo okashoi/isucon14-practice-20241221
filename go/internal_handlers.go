@@ -44,7 +44,9 @@ FROM
 		ON c.id = lcl.chair_id
 WHERE
 	c.is_active = TRUE
-    AND ((SELECT COUNT(chair_sent_at) FROM ride_statuses rs INNER JOIN rides as r ON r.id = rs.ride_id WHERE r.chair_id = c.id) % 6 = 0) FOR UPDATE SKIP LOCKED
+    AND ((SELECT COUNT(chair_sent_at) FROM ride_statuses rs INNER JOIN rides as r ON r.id = rs.ride_id WHERE r.chair_id = c.id) % 6 = 0)
+    AND ((SELECT COUNT(1) FROM ride_statuses rs INNER JOIN rides as r ON r.id = rs.ride_id WHERE r.chair_id = c.id AND rs.status != 'COMPLETED') = 0)
+FOR UPDATE SKIP LOCKED
 `
 
 	if err := tx.SelectContext(ctx, &candidates, q); err != nil {
