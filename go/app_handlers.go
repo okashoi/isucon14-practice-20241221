@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"sync"
@@ -773,7 +774,8 @@ func appGetNotification(w http.ResponseWriter, r *http.Request) {
 func notifyToUser(userID string, message []byte) error {
 	stream, ok := userNotificationStreamMap.Load(userID)
 	if !ok {
-		return errors.New("user is not connected")
+		log.Printf("stream not found for user %s", userID)
+		return nil
 	}
 
 	responseWriter := *stream.(*http.ResponseWriter)
