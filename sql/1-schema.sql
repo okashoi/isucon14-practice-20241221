@@ -50,6 +50,7 @@ CREATE TABLE chair_locations
   PRIMARY KEY (id)
 )
   COMMENT = '椅子の現在位置情報テーブル';
+CREATE INDEX idx_chair_locations_chair_id_created_at_desc ON chair_locations (chair_id, created_at DESC);
 
 DROP TABLE IF EXISTS latest_chair_locations;
 CREATE TABLE latest_chair_locations
@@ -83,6 +84,9 @@ CREATE TABLE users
 )
   COMMENT = '利用者情報テーブル';
 
+CREATE INDEX idx_users_access_token ON users (access_token);
+CREATE INDEX idx_users_invitation_code ON users (invitation_code);
+
 DROP TABLE IF EXISTS payment_tokens;
 CREATE TABLE payment_tokens
 (
@@ -106,11 +110,14 @@ CREATE TABLE rides
   evaluation            INTEGER     NULL     COMMENT '評価',
   created_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '要求日時',
   updated_at            DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT '状態更新日時',
-  PRIMARY KEY (id),
-  INDEX (user_id, updated_at DESC),
-  INDEX (chair_id, updated_at DESC)
+  PRIMARY KEY (id)
 )
   COMMENT = 'ライド情報テーブル';
+
+CREATE INDEX idx_rides_chair_id_updated_at_desc ON rides (chair_id, updated_at DESC);
+CREATE INDEX idx_rides_user_id_created_at_desc ON rides (user_id, created_at DESC);
+CREATE INDEX idx_rides_chair_id_created_at_desc ON rides (chair_id, created_at DESC);
+CREATE INDEX idx_rides_chair_id_created_at_asc ON rides (chair_id, created_at);
 
 DROP TABLE IF EXISTS ride_statuses;
 CREATE TABLE ride_statuses
@@ -173,6 +180,9 @@ CREATE TABLE coupons
   PRIMARY KEY (user_id, code)
 )
   COMMENT 'クーポンテーブル';
+
+CREATE INDEX idx_coupons_used_by ON coupons (used_by);
+CREATE INDEX idx_coupons_code ON coupons (code);
 
 DELIMITER $$
 
