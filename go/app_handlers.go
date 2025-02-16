@@ -797,7 +797,7 @@ func fetchNotification(ctx context.Context, user *User) (*appGetNotificationResp
 	if err := tx.GetContext(ctx, ride, `SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`, user.ID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &appGetNotificationResponse{
-				RetryAfterMs: 30,
+				RetryAfterMs: 500,
 			}, nil
 		}
 		return nil, err
@@ -839,7 +839,7 @@ func fetchNotification(ctx context.Context, user *User) (*appGetNotificationResp
 			CreatedAt: ride.CreatedAt.UnixMilli(),
 			UpdateAt:  ride.UpdatedAt.UnixMilli(),
 		},
-		RetryAfterMs: 30,
+		RetryAfterMs: 500,
 	}
 
 	if ride.ChairID.Valid {
@@ -882,7 +882,10 @@ func getChairStats(ctx context.Context, tx *sqlx.Tx, chairID string) (appGetNoti
 	err := tx.SelectContext(
 		ctx,
 		&rides,
-		`SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC`,
+		`SELECT rides.* FROM rides
+    			JOIN ride_statuses ON ride_statuses.ride_id = rides.id
+						   			AND ride_statuses.status = "COMPLETED"
+         		WHERE rides.chair_id = ? ORDER BY rides.updated_at DESC`,
 		chairID,
 	)
 	if err != nil {
@@ -894,61 +897,10 @@ func getChairStats(ctx context.Context, tx *sqlx.Tx, chairID string) (appGetNoti
 		return stats, nil
 	}
 
-	// 2. ride_id のリストを取得
-	rideIDs := make([]string, len(rides))
-	for i, ride := range rides {
-		rideIDs[i] = ride.ID
-	}
-
-	// 3. 全ての ride_statuses を一度に取得
-	rideStatuses := []RideStatus{}
-	query, args, err := sqlx.In(
-		`SELECT * FROM ride_statuses WHERE ride_id IN (?) ORDER BY created_at`,
-		rideIDs,
-	)
-	if err != nil {
-		return stats, err
-	}
-	query = tx.Rebind(query) // プレースホルダをDBに合わせる
-	err = tx.SelectContext(ctx, &rideStatuses, query, args...)
-	if err != nil {
-		return stats, err
-	}
-
-	// 4. ride_id ごとに ride_statuses をグループ化
-	statusesByRideID := make(map[string][]RideStatus)
-	for _, status := range rideStatuses {
-		statusesByRideID[status.RideID] = append(statusesByRideID[status.RideID], status)
-	}
-
-	// 5. 統計データを計算
 	totalRideCount := 0
 	totalEvaluation := 0.0
 
 	for _, ride := range rides {
-		statuses, ok := statusesByRideID[ride.ID]
-		if !ok {
-			continue
-		}
-
-		var arrivedAt, pickupedAt *time.Time
-		var isCompleted bool
-		for _, status := range statuses {
-			if status.Status == "ARRIVED" {
-				arrivedAt = &status.CreatedAt
-			} else if status.Status == "CARRYING" {
-				pickupedAt = &status.CreatedAt
-			}
-			if status.Status == "COMPLETED" {
-				isCompleted = true
-			}
-		}
-
-		// 必要な条件が満たされている場合のみカウント
-		if arrivedAt == nil || pickupedAt == nil || !isCompleted {
-			continue
-		}
-
 		totalRideCount++
 		totalEvaluation += float64(*ride.Evaluation)
 	}
