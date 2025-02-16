@@ -29,21 +29,6 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	candidates := []CandidateChair{}
 
 	q := `
-WITH latest_chair_ride_status AS (
-	SELECT
-		r.chair_id,
-		lrs.status,
-		lrs.chair_sent_at
-	FROM
-	    rides r
-		INNER JOIN latest_ride_statuses lrs
-			ON r.id = lrs.ride_id
-	WHERE r.updated_at = (
-	    SELECT MAX(r2.updated_at)
-	    FROM rides r2
-	    WHERE r2.chair_id = r.chair_id
-	)	
-)
 SELECT
 	c.id AS id,
 	cm.speed AS speed,
@@ -55,11 +40,8 @@ FROM
 		ON c.model = cm.name
 	LEFT JOIN latest_chair_locations lcl
 		ON c.id = lcl.chair_id
-	LEFT JOIN latest_chair_ride_status lcrs
-		ON c.id = lcrs.chair_id
 WHERE
 	c.is_active = TRUE AND
-	((lcrs.status = 'COMPLETED' AND lcrs.chair_sent_at IS NOT NULL) OR lcrs.status IS NULL)
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
@@ -73,6 +55,14 @@ WHERE
 	if len(candidates) == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
+	}
+
+	// マッチング可能な椅子のみを残す
+	for i, chair := range candidates {
+		s, ok := getLatestChairStatus(chair.ID)
+		if ok && !(s.Status == "COMPLETED" && s.IsSent) {
+			candidates = append(candidates[:i], candidates[i+1:]...)
+		}
 	}
 
 	for _, ride := range rides {
