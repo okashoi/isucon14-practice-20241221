@@ -2,7 +2,9 @@ package main
 
 import (
 	crand "crypto/rand"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -15,10 +17,85 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 )
 
-var db *sqlx.DB
+var (
+	db                *sqlx.DB
+	latestChairStatus sync.Map
+)
+
+type chairStatus struct {
+	Status string
+	IsSent bool
+}
+
+func setLatestChairStatusNotSent(chairID string, status string) {
+	latestChairStatus.Store(chairID, chairStatus{
+		Status: status,
+		IsSent: false,
+	})
+}
+
+func setLatestChairAsSent(chairID string) {
+	status, ok := getLatestChairStatus(chairID)
+	if !ok {
+		return
+	}
+
+	status.IsSent = true
+	latestChairStatus.Store(chairID, status)
+}
+
+func getLatestChairStatus(chairID string) (chairStatus, bool) {
+	var status chairStatus
+	statusAsAny, ok := latestChairStatus.Load(chairID)
+	if !ok {
+		return status, false
+	}
+
+	status = statusAsAny.(chairStatus)
+	return status, true
+}
+
+func InitTagsCache(db *sqlx.DB) {
+	latestChairStatus = sync.Map{}
+
+	var chairStatuses []struct {
+		CharID string `db:"chair_id"`
+		Status string `db:"status"`
+		IsSent bool   `db:"is_sent"`
+	}
+	query := `
+		SELECT
+			r.chair_id,
+			rs.status,
+			rs.chair_sent_at IS NOT NULL AS is_sent
+		FROM
+			rides r
+		INNER JOIN ride_statuses rs
+			ON r.id = rs.ride_id
+		WHERE r.updated_at = (
+			SELECT MAX(r2.updated_at)
+			FROM rides r2
+			WHERE r2.chair_id = r.chair_id
+		)
+	`
+
+	if err := db.Select(&chairStatuses, query); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			panic(err)
+		}
+	}
+
+	for _, chairStatus := range chairStatuses {
+		setLatestChairStatusNotSent(chairStatus.CharID, chairStatus.Status)
+		if chairStatus.IsSent {
+			setLatestChairAsSent(chairStatus.CharID)
+		}
+	}
+}
 
 func main() {
 	mux := setup()
@@ -76,6 +153,8 @@ func setup() http.Handler {
 	_db.SetMaxOpenConns(100)
 	_db.SetMaxIdleConns(100)
 	db = _db
+
+	InitTagsCache(db)
 
 	mux := chi.NewRouter()
 	mux.Use(middleware.Logger)
