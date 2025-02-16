@@ -1,6 +1,6 @@
 .PHONY: *
 
-gogo: stop-services build truncate-logs start-services
+gogo: stop-services build logs/clear start-services
 
 stop-services:
 	sudo systemctl stop nginx
@@ -12,7 +12,11 @@ stop-services:
 build:
 	cd go/ && go build -o isuride
 
-truncate-logs:
+logs: limit=10000
+logs:
+	journalctl -ex --since "$(shell systemctl status isuride-go.service | grep "Active:" | awk '{print $$6, $$7}')" -n $(limit)
+
+logs/clear:
 	sudo journalctl --vacuum-size=1K
 	ssh isucon-s2 sudo journalctl --vacuum-size=1K
 	sudo truncate --size 0 /var/log/nginx/access.log
