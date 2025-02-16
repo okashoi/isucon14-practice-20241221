@@ -46,7 +46,6 @@ CREATE TABLE chair_locations
   latitude   INTEGER     NOT NULL COMMENT '経度',
   longitude  INTEGER     NOT NULL COMMENT '緯度',
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '登録日時',
-  INDEX (chair_id, created_at DESC),
   PRIMARY KEY (id)
 )
   COMMENT = '椅子の現在位置情報テーブル';
@@ -59,7 +58,6 @@ CREATE TABLE latest_chair_locations
     longitude  INTEGER     NOT NULL COMMENT '緯度',
     total_distance INTEGER NOT NULL COMMENT '総移動距離',
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '登録日時',
-    INDEX (chair_id, created_at DESC),
     PRIMARY KEY (chair_id)
 )
     COMMENT = '椅子の現在位置情報と総移動距離テーブル';
@@ -137,10 +135,7 @@ CREATE TABLE latest_ride_statuses
         created_at      DATETIME(6)                                                                NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '状態変更日時',
         app_sent_at     DATETIME(6)                                                                NULL COMMENT 'ユーザーへの状態通知日時',
         chair_sent_at   DATETIME(6)                                                                NULL COMMENT '椅子への状態通知日時',
-        INDEX (ride_id, created_at),
         INDEX (ride_id, created_at DESC),
-        INDEX (ride_id, app_sent_at, created_at),
-        INDEX (ride_id, chair_sent_at, created_at),
         PRIMARY KEY (ride_id)
     )
         COMMENT = 'ライドステータスの変更履歴(最新)テーブル';
