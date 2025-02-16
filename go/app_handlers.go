@@ -882,7 +882,10 @@ func getChairStats(ctx context.Context, tx *sqlx.Tx, chairID string) (appGetNoti
 	err := tx.SelectContext(
 		ctx,
 		&rides,
-		`SELECT * FROM rides WHERE chair_id = ? ORDER BY updated_at DESC`,
+		`SELECT * FROM rides
+         JOIN ride_statuses ON ride_statuses.ride_id = id AND 
+                               ride_statuses.status = "COMPLETED"
+         WHERE chair_id = ? ORDER BY updated_at DESC `,
 		chairID,
 	)
 	if err != nil {
@@ -901,53 +904,53 @@ func getChairStats(ctx context.Context, tx *sqlx.Tx, chairID string) (appGetNoti
 	}
 
 	// 3. 全ての ride_statuses を一度に取得
-	rideStatuses := []RideStatus{}
-	query, args, err := sqlx.In(
-		`SELECT * FROM ride_statuses WHERE ride_id IN (?) ORDER BY created_at`,
-		rideIDs,
-	)
-	if err != nil {
-		return stats, err
-	}
-	query = tx.Rebind(query) // プレースホルダをDBに合わせる
-	err = tx.SelectContext(ctx, &rideStatuses, query, args...)
-	if err != nil {
-		return stats, err
-	}
-
-	// 4. ride_id ごとに ride_statuses をグループ化
-	statusesByRideID := make(map[string][]RideStatus)
-	for _, status := range rideStatuses {
-		statusesByRideID[status.RideID] = append(statusesByRideID[status.RideID], status)
-	}
+	//rideStatuses := []RideStatus{}
+	//query, args, err := sqlx.In(
+	//	`SELECT * FROM ride_statuses WHERE ride_id IN (?) ORDER BY created_at`,
+	//	rideIDs,
+	//)
+	//if err != nil {
+	//	return stats, err
+	//}
+	//query = tx.Rebind(query) // プレースホルダをDBに合わせる
+	//err = tx.SelectContext(ctx, &rideStatuses, query, args...)
+	//if err != nil {
+	//	return stats, err
+	//}
+	//
+	//// 4. ride_id ごとに ride_statuses をグループ化
+	//statusesByRideID := make(map[string][]RideStatus)
+	//for _, status := range rideStatuses {
+	//	statusesByRideID[status.RideID] = append(statusesByRideID[status.RideID], status)
+	//}
 
 	// 5. 統計データを計算
 	totalRideCount := 0
 	totalEvaluation := 0.0
 
 	for _, ride := range rides {
-		statuses, ok := statusesByRideID[ride.ID]
-		if !ok {
-			continue
-		}
-
-		var arrivedAt, pickupedAt *time.Time
-		var isCompleted bool
-		for _, status := range statuses {
-			if status.Status == "ARRIVED" {
-				arrivedAt = &status.CreatedAt
-			} else if status.Status == "CARRYING" {
-				pickupedAt = &status.CreatedAt
-			}
-			if status.Status == "COMPLETED" {
-				isCompleted = true
-			}
-		}
-
-		// 必要な条件が満たされている場合のみカウント
-		if arrivedAt == nil || pickupedAt == nil || !isCompleted {
-			continue
-		}
+		//statuses, ok := statusesByRideID[ride.ID]
+		//if !ok {
+		//	continue
+		//}
+		//
+		//var arrivedAt, pickupedAt *time.Time
+		//var isCompleted bool
+		//for _, status := range statuses {
+		//	//if status.Status == "ARRIVED" {
+		//	//	arrivedAt = &status.CreatedAt
+		//	//} else if status.Status == "CARRYING" {
+		//	//	pickupedAt = &status.CreatedAt
+		//	//}
+		//	if status.Status == "COMPLETED" {
+		//		isCompleted = true
+		//	}
+		//}
+		//
+		//// 必要な条件が満たされている場合のみカウント
+		//if arrivedAt == nil || pickupedAt == nil || !isCompleted {
+		//	continue
+		//}
 
 		totalRideCount++
 		totalEvaluation += float64(*ride.Evaluation)
