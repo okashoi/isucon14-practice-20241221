@@ -29,6 +29,21 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	candidates := []CandidateChair{}
 
 	q := `
+WITH latest_chair_ride_status AS (
+	SELECT
+		r.chair_id,
+		lrs.status,
+		lrs.chair_sent_at
+	FROM
+	    rides r
+		INNER JOIN latest_ride_statuses lrs
+			ON r.id = lrs.ride_id
+	WHERE r.updated_at = (
+	    SELECT MAX(r2.updated_at)
+	    FROM rides r2
+	    WHERE r2.chair_id = r.chair_id
+	)	
+)
 SELECT
 	c.id AS id,
 	cm.speed AS speed,
@@ -40,26 +55,11 @@ FROM
 		ON c.model = cm.name
 	LEFT JOIN latest_chair_locations lcl
 		ON c.id = lcl.chair_id
-	LEFT JOIN (
-		SELECT
-			r.chair_id,
-			lrs.status,
-			lrs.chair_sent_at
-		FROM
-			rides r
-		LEFT JOIN latest_ride_statuses lrs
-				ON r.id = lrs.ride_id
-		WHERE
-			r.created_at = (
-				SELECT MAX(sub_r.created_at)
-				FROM rides sub_r
-				WHERE sub_r.chair_id = r.chair_id
-			)
-	) lr
-		ON c.id = lr.chair_id
+	LEFT JOIN latest_chair_ride_status lcrs
+		ON c.id = lcrs.chair_id
 WHERE
 	c.is_active = TRUE AND
-	((lr.status = 'COMPLETED' AND lr.chair_sent_at IS NOT NULL) OR lr.status IS NULL)
+	((lcrs.status = 'COMPLETED' AND lcrs.chair_sent_at IS NOT NULL) OR lcrs.status IS NULL)
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
