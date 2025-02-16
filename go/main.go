@@ -2,7 +2,9 @@ package main
 
 import (
 	crand "crypto/rand"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -58,8 +60,42 @@ func getLatestChairStatus(chairID string) (chairStatus, bool) {
 	return status, true
 }
 
-func InitTagsCache() {
+func InitTagsCache(db *sqlx.DB) {
 	latestChairStatus = sync.Map{}
+
+	var chairStatuses []struct {
+		CharID string `db:"chair_id"`
+		Status string `db:"status"`
+		IsSent bool   `db:"is_sent"`
+	}
+	query := `
+		SELECT
+			r.chair_id,
+			rs.status,
+			rs.chair_sent_at IS NOT NULL AS is_sent
+		FROM
+			rides r
+		INNER JOIN ride_statuses rs
+			ON r.id = rs.ride_id
+		WHERE r.updated_at = (
+			SELECT MAX(r2.updated_at)
+			FROM rides r2
+			WHERE r2.chair_id = r.chair_id
+		)
+	`
+
+	if err := db.Select(&chairStatuses, query); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			panic(err)
+		}
+	}
+
+	for _, chairStatus := range chairStatuses {
+		setLatestChairStatusNotSent(chairStatus.CharID, chairStatus.Status)
+		if chairStatus.IsSent {
+			setLatestChairAsSent(chairStatus.CharID)
+		}
+	}
 }
 
 func main() {
@@ -71,8 +107,6 @@ func main() {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}()
-
-	InitTagsCache()
 
 	slog.Info("Listening on :8080")
 	http.ListenAndServe(":8080", mux)
@@ -120,6 +154,8 @@ func setup() http.Handler {
 	_db.SetMaxOpenConns(100)
 	_db.SetMaxIdleConns(100)
 	db = _db
+
+	InitTagsCache(db)
 
 	mux := chi.NewRouter()
 	mux.Use(middleware.Logger)
