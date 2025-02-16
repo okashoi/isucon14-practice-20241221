@@ -882,10 +882,10 @@ func getChairStats(ctx context.Context, tx *sqlx.Tx, chairID string) (appGetNoti
 	err := tx.SelectContext(
 		ctx,
 		&rides,
-		`SELECT * FROM rides
-         JOIN ride_statuses ON ride_statuses.ride_id = id AND 
-                               ride_statuses.status = "COMPLETED"
-         WHERE chair_id = ? ORDER BY updated_at DESC `,
+		`SELECT rides.* FROM rides
+    			JOIN ride_statuses ON ride_statuses.ride_id = rides.id
+						   			AND ride_statuses.status = "COMPLETED"
+         		WHERE rides.chair_id = ? ORDER BY rides.updated_at DESC`,
 		chairID,
 	)
 	if err != nil {
@@ -898,10 +898,10 @@ func getChairStats(ctx context.Context, tx *sqlx.Tx, chairID string) (appGetNoti
 	}
 
 	// 2. ride_id のリストを取得
-	rideIDs := make([]string, len(rides))
-	for i, ride := range rides {
-		rideIDs[i] = ride.ID
-	}
+	//rideIDs := make([]string, len(rides))
+	//for i, ride := range rides {
+	//	rideIDs[i] = ride.ID
+	//}
 
 	// 3. 全ての ride_statuses を一度に取得
 	//rideStatuses := []RideStatus{}
