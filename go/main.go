@@ -8,8 +8,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"github.com/kaz/pprotein/integration"
-	"log"
+
 	"log/slog"
 	"net"
 	"net/http"
@@ -122,7 +121,7 @@ func setup() http.Handler {
 		mux.HandleFunc("GET /api/internal/matching", internalGetMatching)
 	}
 
-	mux.Handle("/debug/*", integration.NewDebugHandler())
+	//mux.Handle("/debug/*", integration.NewDebugHandler())
 	return mux
 }
 
@@ -153,11 +152,11 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	}
 	TokenCache.Clear()
 
-	go func() {
-		if _, err := http.Get("http://localhost:9000/api/group/collect"); err != nil {
-			log.Printf("failed to communicate with pprotein: %v", err)
-		}
-	}()
+	//go func() {
+	//	if _, err := http.Get("http://localhost:9000/api/group/collect"); err != nil {
+	//		log.Printf("failed to communicate with pprotein: %v", err)
+	//	}
+	//}()
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 
 }
