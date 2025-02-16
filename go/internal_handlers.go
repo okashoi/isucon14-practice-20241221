@@ -1,24 +1,26 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"log"
 	"net/http"
 	"sort"
+	"time"
 )
 
-// このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
-func internalGetMatching(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func matching() {
+	ctx := context.Background()
 
 	// 最も待たせているリクエスト（ride）
 	ride := &Ride{}
 	if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id IS NULL ORDER BY created_at LIMIT 1`); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			w.WriteHeader(http.StatusNoContent)
+			time.Sleep(100 * time.Millisecond)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		log.Println(err)
 		return
 	}
 
@@ -49,14 +51,12 @@ WHERE
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		log.Println(err)
 		return
 	}
 	if len(candidates) == 0 {
-		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
@@ -76,7 +76,7 @@ WHERE
 	empty := false
 	for _, candidate := range candidates {
 		if err := db.GetContext(ctx, &empty, "SELECT NOT EXISTS (  SELECT 1  FROM rides r  JOIN ride_statuses rs ON rs.ride_id = r.id  WHERE r.chair_id = ?  GROUP BY rs.ride_id  HAVING COUNT(rs.chair_sent_at) <> 6) AS all_completed;", candidate.ID); err != nil {
-			writeError(w, http.StatusInternalServerError, err)
+			log.Println(err)
 			return
 		}
 		if empty {
@@ -85,14 +85,17 @@ WHERE
 		}
 	}
 	if !empty {
-		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", matched.ID, ride.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		log.Println(err)
 		return
 	}
+}
 
-	w.WriteHeader(http.StatusNoContent)
+// このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
+func internalGetMatching(w http.ResponseWriter, r *http.Request) {
+	// matching() に移動済み
+	return
 }

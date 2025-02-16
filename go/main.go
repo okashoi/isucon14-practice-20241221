@@ -31,6 +31,13 @@ func main() {
 		}
 	}()
 
+	go func() {
+		for {
+			matching()
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
 	slog.Info("Listening on :8080")
 	http.ListenAndServe(":8080", mux)
 }
