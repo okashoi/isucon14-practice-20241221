@@ -153,6 +153,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 					writeError(w, http.StatusInternalServerError, err)
 					return
 				}
+				setLatestChairStatusNotSent(ride.ChairID.String, "PICKUP")
 			}
 
 			if req.Latitude == ride.DestinationLatitude && req.Longitude == ride.DestinationLongitude && status == "CARRYING" {
@@ -160,6 +161,7 @@ func chairPostCoordinate(w http.ResponseWriter, r *http.Request) {
 					writeError(w, http.StatusInternalServerError, err)
 					return
 				}
+				setLatestChairStatusNotSent(ride.ChairID.String, "ARRIVED")
 			}
 
 			user := &User{}
@@ -255,6 +257,7 @@ func chairGetNotification(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		setLatestChairAsSent(chair.ID)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -328,6 +331,7 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		setLatestChairStatusNotSent(chair.ID, "ENROUTE")
 	// After Picking up user
 	case "CARRYING":
 		status, err := getLatestRideStatus(ctx, tx, ride.ID)
@@ -343,6 +347,7 @@ func chairPostRideStatus(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		setLatestChairStatusNotSent(chair.ID, "CARRYING")
 	default:
 		writeError(w, http.StatusBadRequest, errors.New("invalid status"))
 	}
