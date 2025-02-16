@@ -4,11 +4,11 @@ import (
 	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/felixge/fgprof"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	"github.com/kaz/pprotein/integration"
 	"log"
 	"log/slog"
 	"net"
@@ -22,11 +22,6 @@ import (
 var db *sqlx.DB
 
 func main() {
-	http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
-	go func() {
-		log.Println(http.ListenAndServe(":6060", nil))
-	}()
-
 	mux := setup()
 
 	go func() {
@@ -127,6 +122,7 @@ func setup() http.Handler {
 		mux.HandleFunc("GET /api/internal/matching", internalGetMatching)
 	}
 
+	mux.Handle("/debug/*", integration.NewDebugHandler())
 	return mux
 }
 
@@ -156,6 +152,12 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	TokenCache.Clear()
+
+	go func() {
+		if _, err := http.Get("http://localhost:9000/api/group/collect"); err != nil {
+			log.Printf("failed to communicate with pprotein: %v", err)
+		}
+	}()
 	writeJSON(w, http.StatusOK, postInitializeResponse{Language: "go"})
 
 }
