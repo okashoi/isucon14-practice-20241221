@@ -13,8 +13,12 @@ build:
 	cd go/ && go build -o isuride
 
 logs: limit=10000
+logs: opts=
 logs:
-	journalctl -ex --since "$(shell systemctl status isuride-go.service | grep "Active:" | awk '{print $$6, $$7}')" -n $(limit)
+	journalctl -ex --since "$(shell systemctl status isuride-go.service | grep "Active:" | awk '{print $$6, $$7}')" -n $(limit) -q $(opts)
+
+logs/error:
+	$(MAKE) logs opts=' --grep "(error|panic|- 500)" --no-pager -q'
 
 logs/clear:
 	sudo journalctl --vacuum-size=1K
