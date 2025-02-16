@@ -75,7 +75,7 @@ WHERE
 	var matched CandidateChair
 	empty := false
 	for _, candidate := range candidates {
-		if err := db.GetContext(ctx, &empty, "SELECT COUNT(*) = 0 FROM (SELECT COUNT(chair_sent_at) = 6 AS completed FROM ride_statuses WHERE ride_id IN (SELECT id FROM rides WHERE chair_id = ?) GROUP BY ride_id) is_completed WHERE completed = FALSE", candidate.ID); err != nil {
+		if err := db.GetContext(ctx, &empty, "SELECT NOT EXISTS (  SELECT 1  FROM rides r  JOIN ride_statuses rs ON rs.ride_id = r.id  WHERE r.chair_id = '01JM6K1TKZRK2DVWN2R855DRM5'  GROUP BY rs.ride_id  HAVING COUNT(rs.chair_sent_at) <> 6) AS all_completed;", candidate.ID); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
