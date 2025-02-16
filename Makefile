@@ -7,21 +7,21 @@ stop-services:
 	sudo systemctl stop isuride-go.service
 	sudo systemctl stop isuride-matcher.service
 	sudo systemctl stop isuride-payment_mock.service
-	ssh isucon-2 sudo systemctl stop mysql
+	ssh isucon-s2 sudo systemctl stop mysql
 
 build:
 	cd go/ && go build -o isuride
 
 truncate-logs:
 	sudo journalctl --vacuum-size=1K
-	ssh isucon-2 sudo journalctl --vacuum-size=1K
+	ssh isucon-s2 sudo journalctl --vacuum-size=1K
 	sudo truncate --size 0 /var/log/nginx/access.log
 	sudo truncate --size 0 /var/log/nginx/error.log
-	ssh isucon-2 sudo truncate --size 0 /var/log/mysql/mysql-slow.log && ssh isucon-2 sudo chmod 666 /var/log/mysql/mysql-slow.log
-	ssh isucon-2 sudo truncate --size 0 /var/log/mysql/error.log
+	ssh isucon-s2 sudo truncate --size 0 /var/log/mysql/mysql-slow.log && ssh isucon-s2 sudo chmod 666 /var/log/mysql/mysql-slow.log
+	ssh isucon-s2 sudo truncate --size 0 /var/log/mysql/error.log
 
 start-services:
-	ssh isucon-2 sudo systemctl start mysql
+	ssh isucon-s2 sudo systemctl start mysql
 	sudo systemctl start isuride-payment_mock.service
 	sudo systemctl start isuride-matcher.service
 	sudo systemctl start isuride-go.service
@@ -39,3 +39,16 @@ pprof: PROF_FILE=~/pprof.samples.$(shell TZ=Asia/Tokyo date +"%H%M").$(shell git
 pprof:
 	curl -sSf "http://localhost:6060/debug/fgprof?seconds=$(TIME)" > $(PROF_FILE)
 	go tool pprof $(PROF_FILE)
+
+logs:
+	journalctl -exu isuride-go --since "5 minutes ago"
+
+logs/error:
+	journalctl -exu isuride-go --since "5 minutes ago"
+
+logs/all:
+	journalctl -exu isuride-go
+
+bench:
+	ssh isucon-bench "./bench run . run --addr 13.114.103.165:443 --target https://isuride.xiv.isucon.net --payment-url http://172.31.35.89:12346 --payment-bind-port 12346"
+
