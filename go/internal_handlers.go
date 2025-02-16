@@ -4,16 +4,14 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"sort"
 )
 
 // このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
 func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// 最も待たせているリクエスト（ride）
-	ride := &Ride{}
-	if err := db.GetContext(ctx, ride, `SELECT * FROM rides WHERE chair_id IS NULL ORDER BY created_at LIMIT 1`); err != nil {
+	rides := []Ride{}
+	if err := db.SelectContext(ctx, &rides, `SELECT * FROM rides WHERE chair_id IS NULL`); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -23,28 +21,45 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type CandidateChair struct {
-		ID            string `db:"id"`
-		Speed         int    `db:"speed"`
-		Latitude      int    `db:"latitude"`
-		Longitude     int    `db:"longitude"`
-		EstimatedTime float32
+		ID        string `db:"id"`
+		Speed     int    `db:"speed"`
+		Latitude  int    `db:"latitude"`
+		Longitude int    `db:"longitude"`
 	}
-	candidates := make([]CandidateChair, 0)
+	candidates := []CandidateChair{}
 
 	q := `
 SELECT
-	chairs.id as id,
-	chair_models.speed as speed,
-	latest_chair_locations.latitude as latitude,
-	latest_chair_locations.longitude as longitude
+	c.id AS id,
+	cm.speed AS speed,
+	lcl.latitude AS latitude,
+	lcl.longitude AS longitude
 FROM
-    chairs
-	INNER JOIN chair_models
-        ON chairs.model = chair_models.name
-	INNER JOIN latest_chair_locations
-		ON chairs.id = latest_chair_locations.chair_id
+	chairs c
+	INNER JOIN chair_models cm
+		ON c.model = cm.name
+	LEFT JOIN latest_chair_locations lcl
+		ON c.id = lcl.chair_id
+	LEFT JOIN (
+		SELECT
+			r.chair_id,
+			lrs.status,
+			lrs.chair_sent_at
+		FROM
+			rides r
+		LEFT JOIN latest_ride_statuses lrs
+				ON r.id = lrs.ride_id
+		WHERE
+			r.created_at = (
+				SELECT MAX(sub_r.created_at)
+				FROM rides sub_r
+				WHERE sub_r.chair_id = r.chair_id
+			)
+	) lr
+		ON c.id = lr.chair_id
 WHERE
-    chairs.is_active = TRUE;
+	c.is_active = TRUE AND
+	((lr.status = 'COMPLETED' AND lr.chair_sent_at IS NOT NULL) OR lr.status IS NULL)
 `
 
 	if err := db.SelectContext(ctx, &candidates, q); err != nil {
@@ -60,38 +75,29 @@ WHERE
 		return
 	}
 
-	// distanceFromPickupToDestination := abs(ride.PickupLatitude-ride.DestinationLatitude) + abs(ride.PickupLongitude-ride.DestinationLongitude)
-	// 配車位置までの移動時間を算出
-	for i, chair := range candidates {
-		distanceToPickup := abs(chair.Latitude-ride.PickupLatitude) + abs(chair.Longitude-ride.PickupLongitude)
-		candidates[i].EstimatedTime = float32(distanceToPickup) / float32(chair.Speed)
-	}
-
-	// 移動時間が最も短いものを 1 件取得
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].EstimatedTime < candidates[j].EstimatedTime
-	})
-
-	var matched CandidateChair
-	empty := false
-	for _, candidate := range candidates {
-		if err := db.GetContext(ctx, &empty, "SELECT COUNT(*) = 0 FROM (SELECT COUNT(chair_sent_at) = 6 AS completed FROM ride_statuses WHERE ride_id IN (SELECT id FROM rides WHERE chair_id = ?) GROUP BY ride_id) is_completed WHERE completed = FALSE", candidate.ID); err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+	for _, ride := range rides {
+		var minChairIdx int
+		var minChair *CandidateChair
+		var minEstimatedTime float32
+		// distanceFromPickupToDestination := abs(ride.PickupLatitude-ride.DestinationLatitude) + abs(ride.PickupLongitude-ride.DestinationLongitude)
+		for i, chair := range candidates {
+			// 配車位置までの移動時間を算出
+			distanceToPickup := abs(chair.Latitude-ride.PickupLatitude) + abs(chair.Longitude-ride.PickupLongitude)
+			estimatedTime := float32(distanceToPickup) / float32(chair.Speed)
+			if minChair == nil || estimatedTime < minEstimatedTime {
+				minChairIdx = i
+				minChair = &chair
+				minEstimatedTime = estimatedTime
+			}
 		}
-		if empty {
-			matched = candidate
-			break
-		}
-	}
-	if !empty {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
+		if minChair != nil {
+			if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", minChair.ID, ride.ID); err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
 
-	if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", matched.ID, ride.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
+			candidates = append(candidates[:minChairIdx], candidates[minChairIdx+1:]...)
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
