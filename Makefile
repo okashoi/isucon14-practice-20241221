@@ -40,15 +40,6 @@ pprof:
 	curl -sSf "http://localhost:6060/debug/fgprof?seconds=$(TIME)" > $(PROF_FILE)
 	go tool pprof $(PROF_FILE)
 
-logs:
-	journalctl -exu isuride-go --since "5 minutes ago"
-
-logs/error:
-	journalctl -exu isuride-go --since "5 minutes ago"
-
-logs/all:
-	journalctl -exu isuride-go
-
 bench:
 	ssh isucon-bench "./bench run . run --addr 13.114.103.165:443 --target https://isuride.xiv.isucon.net --payment-url http://172.31.35.89:12346 --payment-bind-port 12346"
 
